@@ -233,6 +233,48 @@ The `transcript` column is JSONB — an array of turns:
 
 ---
 
+## Call handoff (SIP REFER)
+
+When a patient asks for a human, Priya can cold-transfer the live SIP call to the clinic's real phone number via LiveKit SIP REFER.
+
+Set in `.env`:
+
+```env
+CLINIC_PHONE_NUMBER=+918041234567
+```
+
+If unset, Priya gives the fallback number (080-41234567) and does not attempt a transfer.
+
+**Twilio:** Enable SIP REFER on your Elastic SIP trunk — Console → Elastic SIP Trunking → your trunk → Call Transfer → **SIP REFER** (off by default). Without it, transfer fails gracefully and Priya reads the fallback number.
+
+**How to test**
+
+Quick test without the agent (config only):
+
+```bash
+python scripts/test_handoff.py status
+python scripts/test_handoff.py dry-run
+python scripts/test_handoff.py messages
+```
+
+During an active phone call (get real IDs — do not use `XXXX` placeholders):
+
+```bash
+python scripts/test_handoff.py rooms
+python scripts/test_handoff.py refer --room clinic-<from-output> --identity <sip-from-output>
+```
+
+Without `CLINIC_PHONE_NUMBER`:
+
+- Say "I want to speak to a doctor" — fallback number only, call stays with Priya
+
+With `CLINIC_PHONE_NUMBER` (use your mobile for testing):
+
+- Say "transfer me to a human" — Priya announces the transfer, your phone rings in a few seconds
+- `call_logs.call_outcome` should be `transferred`
+
+---
+
 ## Google Calendar setup
 
 Supabase `slots` is the source of truth for availability. Google Calendar is a **write-only mirror** for clinic staff — the agent never reads from Calendar.
@@ -316,6 +358,7 @@ reception-agent/
 │   ├── appointment.py        # Booking tools (book, check, list doctors)
 │   ├── booking.py            # Supabase slot find + reserve
 │   ├── calendar_mirror.py    # Google Calendar write-only mirror
+│   ├── handoff.py            # SIP REFER transfer to clinic phone
 │   ├── faq.py                # LanceDB FAQ index + search_faq tool
 │   ├── memory.py             # Supabase caller memory (lookup, upsert, log)
 │   ├── notifications.py      # WhatsApp confirmation after booking

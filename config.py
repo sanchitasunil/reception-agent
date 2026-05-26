@@ -77,3 +77,11 @@ def calendar_enabled() -> bool:
             GOOGLE_CALENDAR_ID_ARUN,
         ]
     )
+
+
+# Handoff — cold SIP REFER to clinic landline (optional)
+CLINIC_PHONE_NUMBER: str | None = os.getenv("CLINIC_PHONE_NUMBER")
+
+
+def handoff_enabled() -> bool:
+    return bool(CLINIC_PHONE_NUMBER)

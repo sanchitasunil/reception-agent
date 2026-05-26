@@ -31,6 +31,7 @@ import config  # validates required env vars at import time
 from prompts.system_prompt import build_system_prompt
 from tools.appointment import book_appointment, check_availability, get_doctor_list
 from tools.faq import build_index, search_faq
+from tools.handoff import transfer_to_human
 from tools.memory import _normalize_phone, get_patient, increment_call_count
 from tools.transcript import (
     CallSession,
@@ -46,6 +47,12 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("clinic-agent")
 logger.setLevel(logging.INFO)
+
+# Suppress HTTP/2 frame-level debug noise from Supabase client
+logging.getLogger("hpack").setLevel(logging.WARNING)
+logging.getLogger("hpack.table").setLevel(logging.WARNING)
+logging.getLogger("h2").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 OPENING_LINE = (
     "Hello, thank you for calling Arogya Clinic. I'm Priya, your AI "
@@ -64,7 +71,7 @@ def _opening_line_for_patient(patient_memory: dict | None) -> str:
 
 
 def _sip_caller_phone(participant: rtc.RemoteParticipant) -> str | None:
-    if participant.kind != rtc.ParticipantKind.SIP:
+    if participant.kind != rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
         return None
     return participant.attributes.get("sip.phoneNumber") or participant.identity
 
@@ -173,6 +180,7 @@ class ClinicAgent(Agent):
                 check_availability,
                 get_doctor_list,
                 search_faq,
+                transfer_to_human,
             ],
         )
 
@@ -180,8 +188,6 @@ class ClinicAgent(Agent):
 def prewarm(proc: JobProcess) -> None:
     """Load VAD weights and pre-synthesize the opening greeting before first call."""
     proc.userdata["vad"] = silero.VAD.load()
-
-    build_index()
 
     # tts_for_calls is kept clean (no asyncio.run() event-loop state).
     tts_for_calls = murf.TTS(voice="en-IN-anisha", locale="en-IN")
@@ -348,6 +354,6 @@ if __name__ == "__main__":
             entrypoint_fnc=entrypoint,
             prewarm_fnc=prewarm,
             agent_name="clinic-agent",
-            num_idle_processes=3,
+            num_idle_processes=1,
         )
     )
