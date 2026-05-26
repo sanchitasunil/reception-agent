@@ -219,12 +219,12 @@ The TwiML Bin tells Twilio where to forward incoming calls.
 <?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial>
-    <Sip>sip:abc123.sip.livekit.cloud;transport=tcp</Sip>
+    <Sip>sip:<phone_number>@<sip_uri>;transport=tcp</Sip>
   </Dial>
 </Response>
 ```
-
-For example: `sip:abc123.sip.livekit.cloud;transport=tcp`
+Replace <phone_number> and <sip_uri> with your Twilio phone number and your SIP URI.
+For example: `sip:1234567@abcd1234.sip.livekit.cloud;transport=tcp`
 
 3. Save and confirm it shows **Valid Voice TwiML**
 4. Go to **Products&Services > Numbers&Senders > Overview > Your Number > Edit Details**
