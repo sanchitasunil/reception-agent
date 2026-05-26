@@ -212,7 +212,7 @@ def prewarm(proc: JobProcess) -> None:
         )
         proc.userdata["tts"] = CachedGreetingTTS(tts_for_calls, OPENING_LINE, greeting_frames)
     except Exception:
-        logger.exception("Greeting pre-synthesis failed — will synthesize on first call")
+        logger.exception("Greeting pre-synthesis failed, will synthesize on first call")
         proc.userdata["tts"] = tts_for_calls
 
     from tools.booking import check_slot_coverage

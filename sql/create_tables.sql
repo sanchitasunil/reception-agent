@@ -188,12 +188,3 @@ begin
     raise notice 'Seed complete. Available slots: %',
         (select count(*) from slots where status = 'available');
 end $$;
-
--- -----------------------------------------------------------------------------
--- Verify (optional — run separately after the script succeeds)
--- -----------------------------------------------------------------------------
--- select table_name from information_schema.tables
--- where table_schema = 'public'
---   and table_name in ('patients', 'slots', 'appointments', 'call_logs')
--- order by table_name;
--- select count(*) as available_slots from slots where status = 'available';
