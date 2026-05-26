@@ -219,15 +219,15 @@ The TwiML Bin tells Twilio where to forward incoming calls.
 <?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial>
-    <Sip>sip:YOUR_LIVEKIT_SIP_URI;transport=tcp</Sip>
+    <Sip>sip:abc123.sip.livekit.cloud;transport=tcp</Sip>
   </Dial>
 </Response>
 ```
 
 For example: `sip:abc123.sip.livekit.cloud;transport=tcp`
 
-3. Save — confirm it shows **Valid Voice TwiML**
-4. Go to **Phone Numbers > your number > Voice Configuration**
+3. Save and confirm it shows **Valid Voice TwiML**
+4. Go to **Products&Services > Numbers&Senders > Overview > Your Number > Edit Details**
 5. Set **Configure with** to **TwiML Bin** and select the bin you created
 
 ### Step 4 — LiveKit dispatch rule
