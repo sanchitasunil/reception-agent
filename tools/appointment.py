@@ -5,9 +5,10 @@ import logging
 import random
 from typing import Any
 
-from livekit.agents import function_tool
+from livekit.agents import function_tool, get_job_context
 
 from tools.booking import find_available_slot, reserve_slot
+from tools.transcript import get_call_session
 from tools.memory import log_appointment, upsert_patient
 from tools.notifications import send_whatsapp_confirmation
 
@@ -59,6 +60,16 @@ async def book_appointment(
         }
 
     logger.info("Booking confirmed: %s for %s", booking_id, patient_name)
+
+    job_ctx = get_job_context(required=False)
+    if job_ctx:
+        cs = get_call_session(job_ctx.room.name)
+        if cs:
+            cs.set_outcome(
+                intent="booking",
+                outcome="booked",
+                booking_id=booking_id,
+            )
 
     asyncio.create_task(
         send_whatsapp_confirmation(

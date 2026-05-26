@@ -185,6 +185,54 @@ Edge cases:
 
 ---
 
+## Transcript logging setup
+
+Every call is stored in Supabase `call_logs` when the room disconnects. The agent collects user and assistant speech during the call and writes one row per call.
+
+Run this in the Supabase SQL editor:
+
+```sql
+CREATE TABLE call_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    phone TEXT,
+    started_at TIMESTAMPTZ DEFAULT NOW(),
+    ended_at TIMESTAMPTZ,
+    duration_seconds INTEGER,
+    transcript JSONB,
+    booking_id TEXT,
+    intent TEXT,
+    call_outcome TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_call_logs_phone ON call_logs(phone);
+CREATE INDEX idx_call_logs_started_at ON call_logs(started_at DESC);
+```
+
+The `transcript` column is JSONB — an array of turns:
+
+```json
+[
+  {"role": "agent", "text": "Hello, I'm Priya...", "ts": 0.0},
+  {"role": "user", "text": "Hi I want to book...", "ts": 3.2}
+]
+```
+
+- **intent:** `booking`, `faq`, `cancellation`, `reschedule`, or `unknown` (inferred from keywords at call end if not set by a tool)
+- **call_outcome:** `booked`, `cancelled`, `rescheduled`, `answered_faq`, `transferred`, `abandoned`, or `unknown` (set to `booked` when `book_appointment` succeeds)
+
+**Privacy (DPDP):** `call_logs.phone` is stored in normalised `+91` E.164 form. Transcript text may include the patient's name and reason for visit — expected for clinic review, but treat `call_logs` as sensitive personal data in production.
+
+**How to test**
+
+1. Make a call (phone or Playground), ask a question, book if you can, then hang up
+2. Open Supabase → `call_logs` — one new row
+3. Expand `transcript` — alternating agent/user turns with relative `ts` (seconds from call start)
+4. After a booking: `intent` = `booking`, `call_outcome` = `booked`, `booking_id` = `ARG-XXXX`
+5. FAQ-only call (hours question, no booking): `intent` = `faq`, `call_outcome` = `unknown`
+
+---
+
 ## Google Calendar setup
 
 Supabase `slots` is the source of truth for availability. Google Calendar is a **write-only mirror** for clinic staff — the agent never reads from Calendar.
@@ -270,7 +318,8 @@ reception-agent/
 │   ├── calendar_mirror.py    # Google Calendar write-only mirror
 │   ├── faq.py                # LanceDB FAQ index + search_faq tool
 │   ├── memory.py             # Supabase caller memory (lookup, upsert, log)
-│   └── notifications.py      # WhatsApp confirmation after booking
+│   ├── notifications.py      # WhatsApp confirmation after booking
+│   └── transcript.py         # Call transcript collection + call_logs write
 ├── config.py                 # Env var loading and validation
 ├── scripts/
 │   └── setup_twilio_sip.py   # One-time Twilio + LiveKit SIP setup

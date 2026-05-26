@@ -31,7 +31,15 @@ import config  # validates required env vars at import time
 from prompts.system_prompt import build_system_prompt
 from tools.appointment import book_appointment, check_availability, get_doctor_list
 from tools.faq import build_index, search_faq
-from tools.memory import get_patient, increment_call_count
+from tools.memory import _normalize_phone, get_patient, increment_call_count
+from tools.transcript import (
+    CallSession,
+    infer_intent_from_turns,
+    register_call_session,
+    save_transcript,
+    unregister_call_session,
+)
+from livekit.agents.voice.events import ConversationItemAddedEvent, UserInputTranscribedEvent
 
 load_dotenv()
 
@@ -277,6 +285,38 @@ async def entrypoint(ctx: JobContext) -> None:
     prompt = build_system_prompt(patient_memory)
     opening_line = _opening_line_for_patient(patient_memory)
 
+    log_phone = _normalize_phone(caller_phone) if caller_phone else "unknown"
+    call_session = CallSession(phone=log_phone)
+    register_call_session(ctx.room.name, call_session)
+    transcript_saved = False
+
+    async def _finalize_transcript() -> None:
+        nonlocal transcript_saved
+        if transcript_saved:
+            return
+        transcript_saved = True
+        infer_intent_from_turns(call_session)
+        await save_transcript(call_session)
+        unregister_call_session(ctx.room.name)
+
+    def _on_room_disconnected(*_args: object) -> None:
+        asyncio.create_task(_finalize_transcript())
+
+    ctx.room.on("disconnected", _on_room_disconnected)
+
+    @session.on("user_input_transcribed")
+    def on_user_input_transcribed(event: UserInputTranscribedEvent) -> None:
+        if event.is_final and event.transcript:
+            call_session.add_turn("user", event.transcript)
+
+    @session.on("conversation_item_added")
+    def on_conversation_item_added(event: ConversationItemAddedEvent) -> None:
+        item = event.item
+        if item.type == "message" and item.role == "assistant":
+            text = item.text_content
+            if text:
+                call_session.add_turn("agent", text)
+
     await session.start(ClinicAgent(prompt), room=ctx.room)
     logger.info("Session started (%.1fs)", time.monotonic() - t0)
 
@@ -287,10 +327,10 @@ async def entrypoint(ctx: JobContext) -> None:
             logger.error("Phone greeting timed out — call may have dropped")
         except Exception:
             logger.exception("Phone greeting failed")
-
     while ctx.room.isconnected():
         await asyncio.sleep(0.25)
 
+    await _finalize_transcript()
     logger.info("Room %s disconnected", ctx.room.name)
 
 
