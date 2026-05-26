@@ -1,26 +1,58 @@
-# Reception Agent
+# Reception Agent — AI Phone Receptionist
 
-An AI voice receptionist that picks up your phone line, books appointments, answers questions, and sends WhatsApp confirmations after every booking. Built for a medical clinic. Easy to adapt for any business that takes appointments over the phone.
+An AI voice receptionist that picks up your phone line, books appointments, answers questions, and sends WhatsApp confirmations. Built for a medical clinic. Swap the prompt and knowledge base to make it anything.
 
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
+[![LiveKit](https://img.shields.io/badge/Transport-LiveKit%20Agents-002cf2)](https://docs.livekit.io/agents)
+[![Deepgram](https://img.shields.io/badge/STT-Deepgram%20Nova--3-13EF93?logoColor=black)](https://deepgram.com)
+[![Gemini](https://img.shields.io/badge/LLM-Gemini%202.0%20Flash-4285F4?logo=google&logoColor=white)](https://aistudio.google.com)
+[![Murf](https://img.shields.io/badge/TTS-Murf%20Falcon-6366F1)](https://murf.ai/voices)
+[![Twilio](https://img.shields.io/badge/Phone-Twilio%20SIP-F22F46?logo=twilio&logoColor=white)](https://twilio.com)
+[![Supabase](https://img.shields.io/badge/Database-Supabase-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com)
+
+---
+
+## What it does
+
+- **Answers inbound calls** via Twilio, speaks with Murf Falcon TTS (`en-IN-anisha`, ~130ms to first audio)
+- **Books, cancels, and reschedules** appointments against a live Supabase slot table
+- **Greets returning callers by name** — looks up caller memory on every call, no need to re-introduce yourself
+- **Answers FAQs** using semantic search over a local knowledge base (LanceDB + all-MiniLM-L6-v2)
+- **Sends WhatsApp confirmations** after every booking via Twilio
+- **Transfers calls to a human** via SIP REFER when asked
+- **Mirrors bookings to Google Calendar** for clinic staff (write-only, optional)
+- **Logs full transcripts** with intent and outcome labels to Supabase after every call
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    A["📞 Caller"] -->|dials| B["Twilio"]
+    B -->|TwiML → SIP| C["LiveKit SIP Trunk"]
+    C -->|dispatch rule| D["clinic-agent"]
+
+    D -->|audio| E["Deepgram STT"]
+    E -->|transcript| F["Gemini Flash"]
+    F -->|reply text| G["Murf Falcon TTS"]
+    G -->|audio| D
+
+    F -.->|"upsert"| H[("Supabase\nslots · patients\nappointments\ncall_logs")]
+    F -.->|"confirmation"| I["📱 WhatsApp"]
+    F -.->|"mirror"| J["📅 Google Calendar"]
+
+    style A fill:#444,stroke:#888,color:#fff
+    style B fill:#F22F46,stroke:#f77,color:#fff
+    style C fill:#002cf2,stroke:#88aaff,color:#fff
+    style D fill:#1a1a2e,stroke:#6366F1,color:#fff
+    style E fill:#13EF93,stroke:#0a9,color:#000
+    style F fill:#4285F4,stroke:#89b4fa,color:#fff
+    style G fill:#6366F1,stroke:#a5b4fc,color:#fff
+    style H fill:#3ECF8E,stroke:#1a7a5a,color:#000
+    style I fill:#25D366,stroke:#128C7E,color:#fff
+    style J fill:#1a73e8,stroke:#669df6,color:#fff
 ```
-Caller dials Twilio number
-  -> TwiML Bin forwards to LiveKit SIP URI
-    -> Inbound SIP trunk receives the call
-      -> Dispatch rule routes to clinic-agent worker
-        -> Deepgram (STT) -> Gemini (LLM) -> Murf (TTS)
-```
-
-**Stack**
-
-| Layer | Service | Model / Version |
-|---|---|---|
-| Phone routing | Twilio + LiveKit SIP | |
-| Speech to text | Deepgram | Nova-3 |
-| Language model | Google AI | Gemini 2.0 Flash |
-| Text to speech | Murf Falcon | `en-IN-anisha` |
-| Voice activity detection | Silero | |
-| Caller memory + slots | Supabase | |
-| FAQ search | LanceDB + HuggingFace | all-MiniLM-L6-v2 |
 
 ---
 
@@ -31,7 +63,7 @@ Caller dials Twilio number
 3. [Database, memory, and slots](#3-database-memory-and-slots)
 4. [Google Calendar](#4-google-calendar)
 5. [Transcript logging](#5-transcript-logging)
-6. [Knowledge base (RAG)](#6-knowledge-base-rag)
+6. [Knowledge base](#6-knowledge-base)
 7. [Project structure](#7-project-structure)
 8. [Adapting for your use case](#8-adapting-for-your-use-case)
 9. [Common errors](#9-common-errors)
@@ -41,7 +73,7 @@ Caller dials Twilio number
 
 ## 1. Quick start
 
-### Clone the repo
+### Clone
 
 ```bash
 git clone <repo-url>
@@ -82,7 +114,7 @@ cp .env.example .env
 Copy-Item .env.example .env
 ```
 
-Open `.env` and fill in the values below. You will come back to add telephony and database keys in later sections.
+Open `.env` and fill in every value. The table below shows where to find each one. You will come back to add Supabase and Twilio values in later sections.
 
 **Required**
 
@@ -117,11 +149,11 @@ Open `.env` and fill in the values below. You will come back to add telephony an
 python agent.py download-files
 ```
 
-Downloads Silero VAD and the FAQ embedding model (`all-MiniLM-L6-v2`, ~80 MB on first run), then builds the LanceDB index. You should see `FAQ index built: N chunks` in the output.
+Downloads Silero VAD and the FAQ embedding model (`all-MiniLM-L6-v2`, ~80 MB on first run) and builds the LanceDB index. Watch for `FAQ index built: N chunks` in the output.
 
-### Check all API keys
+### Check all API connections
 
-Run this before starting the agent for the first time. It tests connectivity to every service and prints a clear OK or FAIL for each one.
+Run this before starting the agent for the first time. It pings every service and prints a clear OK or FAIL.
 
 ```bash
 python scripts/check_apis.py
@@ -129,44 +161,53 @@ python scripts/check_apis.py
 
 Fix any failures before continuing.
 
-### Test in the browser (no phone needed)
+### Test in the browser — no phone needed
 
 ```bash
 python agent.py dev
 ```
 
-Open the [LiveKit Agents Playground](https://agents-playground.livekit.io/), connect with your LiveKit URL, API key, and secret. The agent will join and you can talk to it with your microphone.
+Open the [LiveKit Agents Playground](https://agents-playground.livekit.io/), connect with your LiveKit URL, API key, and secret, and talk to the agent with your microphone.
 
 ---
 
 ## 2. Telephony, WhatsApp, and call handoff
 
-This section covers everything call-related: routing real phone calls to the agent, sending WhatsApp confirmations after bookings, and transferring calls to a human when asked.
+Everything call-related in one place: routing real phone calls to the agent, sending WhatsApp confirmations, and transferring to a human.
 
-### Step 1 - Twilio phone number
+### How the routing works
 
-Log into [console.twilio.com](https://console.twilio.com). From the account dashboard, copy your **Account SID**, **Auth Token**, and **phone number** and add them to `.env`.
+```
+Caller dials Twilio number
+  -> TwiML Bin forwards the call to LiveKit SIP URI
+    -> LiveKit inbound SIP trunk receives it
+      -> Dispatch rule routes it to the clinic-agent worker
+        -> Agent picks up
+```
 
-### Step 2 - LiveKit SIP trunk
+### Step 1 — Twilio phone number
 
-The SIP trunk is the bridge that receives calls from Twilio and hands them to LiveKit.
+Log into [console.twilio.com](https://console.twilio.com). Copy your **Account SID**, **Auth Token**, and **phone number** from the account dashboard and add them to `.env`.
+
+### Step 2 — LiveKit SIP trunk
+
+The SIP trunk is the bridge that receives calls from Twilio.
 
 1. Go to [LiveKit Cloud](https://cloud.livekit.io) > Telephony > SIP Trunks
-2. Click **New trunk** and select **Inbound**
-3. Fill in:
-   - **Trunk name:** anything, e.g. `clinic-inbound`
-   - **Numbers:** your Twilio number in E.164 format (e.g. `+12015551234`)
-   - **Allowed addresses:** `0.0.0.0/0` to accept calls from all Twilio IPs
-4. Save and copy the **SIP URI** shown at the top (e.g. `abc123.sip.livekit.cloud`)
+2. Click **New trunk** > **Inbound**
+3. Set a **trunk name** (e.g. `clinic-inbound`)
+4. Add your Twilio number to **Numbers** in E.164 format (e.g. `+12015551234`)
+5. Set **Allowed addresses** to `0.0.0.0/0`
+6. Save and copy the **SIP URI** shown at the top (e.g. `abc123.sip.livekit.cloud`)
 
-Add it to `.env` as `LIVEKIT_SIP_URI` (hostname only, no `sip:` prefix).
+Add it to `.env` as `LIVEKIT_SIP_URI` — hostname only, no `sip:` prefix.
 
-### Step 3 - Twilio TwiML Bin
+### Step 3 — Twilio TwiML Bin
 
-The TwiML Bin tells Twilio where to forward calls when your number receives one.
+The TwiML Bin tells Twilio where to forward incoming calls.
 
-1. Go to Twilio Console > Develop > TwiML Bins > **Create new TwiML Bin**
-2. Give it a name (e.g. `clinic`) and paste the following, replacing the SIP URI with yours:
+1. Twilio Console > Develop > TwiML Bins > **Create new TwiML Bin**
+2. Give it a name (e.g. `clinic`) and paste the content below, replacing the SIP URI:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -177,23 +218,23 @@ The TwiML Bin tells Twilio where to forward calls when your number receives one.
 </Response>
 ```
 
-Example: `sip:abc123.sip.livekit.cloud;transport=tcp`
+For example: `sip:abc123.sip.livekit.cloud;transport=tcp`
 
-3. Save. Confirm it shows **Valid Voice TwiML** at the bottom.
+3. Save — confirm it shows **Valid Voice TwiML**
 4. Go to **Phone Numbers > your number > Voice Configuration**
-5. Set **Configure with** to **TwiML Bin** and select the bin you just created
+5. Set **Configure with** to **TwiML Bin** and select the bin you created
 
-### Step 4 - LiveKit dispatch rule
+### Step 4 — LiveKit dispatch rule
 
-The dispatch rule tells LiveKit which agent worker to use when a call arrives.
+The dispatch rule tells LiveKit which agent worker handles each call.
 
-1. Go to LiveKit Cloud > Telephony > Dispatch Rules > **Create new rule**
-2. Fill in:
+1. LiveKit Cloud > Telephony > Dispatch Rules > **Create new rule**
+2. Set:
    - **Rule name:** `clinic-dispatch`
    - **Rule type:** Individual
    - **Room prefix:** `clinic-`
    - **Agent name:** `clinic-agent`
-3. Switch to the **JSON editor** and confirm it looks like this:
+3. Switch to the **JSON editor** and confirm it looks exactly like this:
 
 ```json
 {
@@ -211,23 +252,25 @@ The dispatch rule tells LiveKit which agent worker to use when a call arrives.
 }
 ```
 
-The `agentName` must match exactly. A dispatch rule without the `agents` block will answer the call but stay completely silent.
+> The `agentName` must match exactly. A rule without the `agents` block will answer the call but stay completely silent.
 
-### Step 5 - Run the agent and call it
-
-Start the agent in a terminal. Use `start` for phone testing (stable, no file-watcher restarts):
+### Step 5 — Run the agent and call it
 
 ```bash
+# For phone testing — stable, no file-watcher restarts
 python agent.py start
+
+# For development with verbose logs
+python agent.py dev
 ```
 
 Call your Twilio number. The agent should answer within 2-3 rings.
 
-**If calls arrive but the agent stays silent**, run the SIP monitor as a backup dispatcher in a second terminal. It polls every second and dispatches `clinic-agent` to any new SIP room that does not already have an agent:
-
-```bash
-python scripts/sip_monitor.py
-```
+> **Calls arrive but the agent stays silent?** Run the SIP monitor as a backup dispatcher in a second terminal. It polls every second and dispatches `clinic-agent` to any new SIP room that does not already have an agent attached.
+>
+> ```bash
+> python scripts/sip_monitor.py
+> ```
 
 To watch calls arrive and leave in real time:
 
@@ -235,13 +278,13 @@ To watch calls arrive and leave in real time:
 python scripts/watch_calls.py
 ```
 
-To verify the SIP trunk and dispatch rule are wired up correctly:
+To verify your SIP trunk and dispatch rule are wired up correctly:
 
 ```bash
 python scripts/diagnose_telephony.py
 ```
 
-Alternatively, the setup script can create the SIP trunk and dispatch rule automatically from your `.env` values:
+Prefer a script over the dashboard? This sets up the SIP trunk and dispatch rule automatically from your `.env` values:
 
 ```bash
 python scripts/setup_twilio_sip.py
@@ -249,7 +292,7 @@ python scripts/setup_twilio_sip.py
 
 ### WhatsApp confirmations
 
-After every booking, the agent sends a WhatsApp confirmation to the patient's number in the background. The voice call does not wait for delivery.
+After every booking the agent sends a WhatsApp message to the patient. No extra setup beyond the `.env` values above.
 
 **Sandbox setup (free, for testing):**
 
@@ -266,11 +309,11 @@ python scripts/test_whatsapp_confirmation.py --phone +919876543210
 python scripts/test_whatsapp_confirmation.py --phone +919876543210 --dry-run
 ```
 
-Check logs for a Twilio message SID (success) or an error line (failure). The message should arrive within 5-10 seconds of a booking.
+The confirmation should arrive within 5-10 seconds of a booking. Check logs for the Twilio message SID on success, or an error line on failure.
 
 ### Call handoff
 
-When a caller asks to speak to a human, the agent transfers the live SIP call to a real phone via SIP REFER.
+When a caller asks to speak to a human, the agent cold-transfers the live call to a real phone via SIP REFER.
 
 Add to `.env`:
 
@@ -278,9 +321,9 @@ Add to `.env`:
 CLINIC_PHONE_NUMBER=+918041234567
 ```
 
-Also enable **SIP REFER** in Twilio Console > Elastic SIP Trunking > your trunk > **General** tab > **Call Transfer (SIP REFER)** toggle. It is off by default.
+Also enable **SIP REFER** in Twilio: Elastic SIP Trunking > your trunk > **General** tab > **Call Transfer (SIP REFER)** toggle. It is off by default.
 
-If `CLINIC_PHONE_NUMBER` is not set, the agent reads the clinic number aloud and does not attempt a transfer. If `CLINIC_PHONE_NUMBER` is set but SIP REFER is not enabled, the transfer fails gracefully and the agent reads the number instead.
+If `CLINIC_PHONE_NUMBER` is unset, the agent reads the number aloud instead of transferring. If it is set but SIP REFER is not enabled, the transfer fails gracefully and the agent reads the number.
 
 **Test:**
 
@@ -290,7 +333,7 @@ python scripts/test_handoff.py dry-run
 python scripts/test_handoff.py messages
 ```
 
-During a live call (get real room and identity values from the `rooms` command first):
+During a live call — get real room and identity values from `rooms` first:
 
 ```bash
 python scripts/test_handoff.py rooms
@@ -302,10 +345,10 @@ python scripts/test_handoff.py refer --room clinic-XXXX --identity sip-XXXX
 | Symptom | Fix |
 |---|---|
 | Call drops immediately | Confirm the TwiML Bin URL is reachable and the `<Sip>` URI ends with `;transport=tcp` |
-| Agent does not answer | Run `python scripts/diagnose_telephony.py`. Confirm `agent.py` is running. Check the dispatch rule has `agentName: clinic-agent` in the `agents` block |
+| Agent does not answer | Run `python scripts/diagnose_telephony.py`. Check `agent.py` is running and the dispatch rule has `agentName: clinic-agent` in the `agents` block |
 | Agent answers but stays silent | The dispatch rule is missing the `agents` block. Edit it in LiveKit Cloud. Also try `python scripts/sip_monitor.py` in a second terminal |
 | Call drops mid-greeting | Use `python agent.py start` for phone testing. The `dev` mode restarts on every file save, which drops active calls |
-| Audio cuts out | Run `python agent.py download-files` to re-verify the Silero VAD model |
+| Audio cuts out | Run `python agent.py download-files` to re-verify Silero VAD |
 
 ---
 
@@ -315,7 +358,7 @@ All persistent data lives in Supabase: caller memory, appointment slots, booking
 
 ### Set up the database
 
-1. Create a free account at [supabase.com](https://supabase.com) (500 MB storage, no expiry)
+1. Create a free account at [supabase.com](https://supabase.com) (500 MB, no expiry)
 2. Create a new project and wait for it to finish provisioning
 3. Go to **Settings > API** and copy:
    - **Project URL** (e.g. `https://abcdefghijk.supabase.co`)
@@ -323,85 +366,87 @@ All persistent data lives in Supabase: caller memory, appointment slots, booking
 4. Add both to `.env` as `SUPABASE_URL` and `SUPABASE_KEY`
 5. Go to **SQL Editor**, paste the full contents of `sql/create_tables.sql`, select all (Ctrl+A), and click **Run**
 
-The script creates all four tables, adds indexes, and seeds 14 days of available slots so the agent can take bookings right away. It is safe to re-run.
+The script creates all four tables, adds indexes, and seeds 14 days of available slots so the agent can take bookings immediately. It is safe to re-run.
 
 ### Tables
 
 | Table | What it stores |
 |---|---|
 | `patients` | Caller name, preferred doctor, visit history, call count |
-| `slots` | Every 30-minute slot: available or booked, with doctor, date, and time |
+| `slots` | Every 30-minute time slot — available or booked, with doctor, date, and time |
 | `appointments` | Booking audit log with confirmed / cancelled / rescheduled status |
 | `call_logs` | Full call transcript, intent label, and outcome label for every call |
 
 ### Caller memory
 
-On every inbound call the agent looks up the caller's phone number from the SIP metadata. If a matching row is found in `patients`, their name and last booking details are injected into the system prompt before the call begins. The agent greets them by name and skips asking for their phone number again.
+On every inbound call the agent looks up the caller's phone number from the SIP metadata. If a match exists in `patients`, their name and last booking details are injected into the system prompt before the call starts. The agent greets them by name and skips asking for their number again.
 
 After a successful booking, `patients` and `appointments` are upserted automatically.
 
-**Test memory without making a call:**
+**Test without making a call:**
 
 ```bash
-python scripts/test_memory.py lookup --phone 9876543210   # same lookup the agent runs
+python scripts/test_memory.py lookup --phone 9876543210   # same lookup the agent runs on every call
 python scripts/test_memory.py call   --phone 9876543210   # simulate call start
 python scripts/test_memory.py book   --phone 9876543210   # simulate post-booking write
-python scripts/test_memory.py prompt --phone 9876543210   # preview the greeting
+python scripts/test_memory.py prompt --phone 9876543210   # preview the greeting the agent would use
 python scripts/test_memory.py flow   --phone 9876543210   # run all of the above in sequence
 ```
 
 What to verify:
 - **First call:** `patients` and `appointments` rows appear in Supabase after a booking
 - **Second call (same number):** agent greets by name, `call_count` increments
-- **Supabase down:** agent treats the caller as a first-timer (graceful fallback, no crash)
+- **Supabase down:** agent treats the caller as a first-timer and continues normally
 
 ### Slot seeding
 
-The initial seed in `sql/create_tables.sql` covers 14 days. An Edge Function keeps slots topped up automatically by running every Sunday at midnight IST.
+The initial seed in `sql/create_tables.sql` covers 14 days. A Supabase Edge Function keeps slots topped up automatically every Sunday at midnight IST.
 
 **Deploy the Edge Function:**
 
 1. Install the Supabase CLI:
 
-```bash
-npm install -g supabase
-```
+   ```bash
+   npm install -g supabase
+   ```
 
-2. Link to your project. Your **project ref** is the subdomain in your project URL. For `https://abcdefghijk.supabase.co` the project ref is `abcdefghijk`. You can also find it at Settings > General > Reference ID.
+2. Link to your project.
 
-```bash
-supabase login
-supabase link --project-ref YOUR_PROJECT_REF
-```
+   Your **project ref** is the subdomain in your Supabase project URL. For `https://abcdefghijk.supabase.co` it is `abcdefghijk`. Also at Settings > General > Reference ID.
 
-3. Deploy the function from this repo:
+   ```bash
+   supabase login
+   supabase link --project-ref YOUR_PROJECT_REF
+   ```
 
-```bash
-supabase functions deploy seed-slots --no-verify-jwt
-```
+3. Deploy:
 
-4. Enable `pg_cron` under **Database > Extensions**, then schedule the weekly run in the SQL editor. Replace `YOUR_PROJECT_REF` and `YOUR_SERVICE_ROLE_KEY` with real values.
+   ```bash
+   supabase functions deploy seed-slots --no-verify-jwt
+   ```
 
-Your **service role key** is at Settings > API > Project API keys > `service_role`. It has full database access so keep it out of version control and client code.
+4. Enable `pg_cron` under **Database > Extensions**, then schedule the weekly run in the SQL editor:
 
-```sql
-select cron.schedule(
-  'seed-slots-weekly',
-  '30 18 * * 0',   -- Sunday 18:30 UTC = midnight IST
-  $$
-  select net.http_post(
-    url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/seed-slots',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer YOUR_SERVICE_ROLE_KEY'
-    ),
-    body := '{}'::jsonb
-  )
-  $$
-);
-```
+   Your **service role key** is at Settings > API > Project API keys > `service_role`. It has full database access — keep it out of version control.
 
-**Test the Edge Function manually** before relying on the cron. Use your service role key from Settings > API.
+   ```sql
+   select cron.schedule(
+     'seed-slots-weekly',
+     '30 18 * * 0',   -- Sunday 18:30 UTC = midnight IST
+     $$
+     select net.http_post(
+       url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/seed-slots',
+       headers := jsonb_build_object(
+         'Content-Type', 'application/json',
+         'Authorization', 'Bearer YOUR_SERVICE_ROLE_KEY'
+       ),
+       body := '{}'::jsonb
+     )
+     $$
+   );
+   ```
+
+**Test the Edge Function manually** before relying on the cron.
 
 macOS / Linux:
 
@@ -442,7 +487,7 @@ curl -sS -X POST "http://127.0.0.1:54321/functions/v1/seed-slots" \
   -d "{}"
 ```
 
-**Manual seed (fallback)** - run in the Supabase SQL editor if you need to fill slots immediately:
+**Manual seed (fallback)** — run in the Supabase SQL editor:
 
 ```sql
 INSERT INTO slots (doctor, iso_date, iso_time, status)
@@ -479,7 +524,7 @@ FROM slots
 WHERE iso_date >= CURRENT_DATE;
 ```
 
-The agent logs `SLOT COVERAGE: N days ahead - OK` on startup. To test the warning, delete far-future slots and restart:
+The agent logs `SLOT COVERAGE: N days ahead - OK` on startup. To test the low-coverage warning, delete far-future slots and restart:
 
 ```sql
 DELETE FROM slots WHERE iso_date > CURRENT_DATE + INTERVAL '10 days';
@@ -501,15 +546,15 @@ ORDER BY start_time DESC LIMIT 5;
 
 ## 4. Google Calendar
 
-Supabase `slots` is the source of truth for availability. Google Calendar is a write-only mirror for clinic staff. The agent never reads from it.
+Supabase `slots` is the source of truth. Google Calendar is a write-only mirror for clinic staff. The agent never reads from it.
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a project
 2. Enable the **Google Calendar API**
 3. Go to **IAM > Service Accounts > Create** (no project-level role needed at this step)
-4. Open the service account, go to **Keys > Add Key > JSON**, and save the file as `service-account.json` in the project root (already gitignored)
-5. Open [Google Calendar](https://calendar.google.com) and create two calendars: one for each doctor
-6. For each calendar: **Settings > Share with specific people > add the service account email > Make changes to events**
-7. For each calendar: **Settings > Integrate calendar > Calendar ID** - copy the ID (e.g. `abc123@group.calendar.google.com`)
+4. Open the service account > **Keys > Add Key > JSON** — save the file as `service-account.json` in the project root (already gitignored)
+5. Open [Google Calendar](https://calendar.google.com) and create one calendar per doctor
+6. For each calendar: **Settings > Share with specific people** > add the service account email > **Make changes to events**
+7. For each calendar: **Settings > Integrate calendar > Calendar ID** — copy the ID (e.g. `abc123@group.calendar.google.com`)
 8. Add to `.env`:
 
 ```env
@@ -526,13 +571,15 @@ python scripts/test_calendar.py create --dry-run
 python scripts/test_calendar.py create --doctor "Dr. Meera Nair"
 ```
 
-Without Calendar configured, logs show `Calendar mirror disabled - skipping` and bookings work normally. If credentials are misconfigured, the agent logs an error but the booking and WhatsApp confirmation still complete.
+Without Calendar configured, logs show `Calendar mirror disabled - skipping` and bookings work normally. If credentials are misconfigured, the agent logs an error but the booking and WhatsApp confirmation still go through.
 
 ---
 
 ## 5. Transcript logging
 
-Every call produces one row in `call_logs` (created by `sql/create_tables.sql`). The `transcript` column is a JSONB array of turns:
+Every call produces one row in `call_logs` (created by `sql/create_tables.sql`).
+
+The `transcript` column is a JSONB array of turns:
 
 ```json
 [
@@ -546,20 +593,20 @@ Every call produces one row in `call_logs` (created by `sql/create_tables.sql`).
 | `intent` | `booking`, `faq`, `cancellation`, `reschedule`, `unknown` |
 | `call_outcome` | `booked`, `cancelled`, `rescheduled`, `answered_faq`, `transferred`, `abandoned`, `unknown` |
 
-To view a transcript: Supabase dashboard > `call_logs` > expand the `transcript` cell. After a booking you should see `intent = booking` and `call_outcome = booked`.
+View a transcript: Supabase dashboard > `call_logs` > expand the `transcript` cell. After a booking you should see `intent = booking` and `call_outcome = booked`.
 
 **Privacy note:** Transcripts may contain caller names and visit reasons. Treat `call_logs` as sensitive personal data in production.
 
 ---
 
-## 6. Knowledge base (RAG)
+## 6. Knowledge base
 
-The agent answers factual questions by searching `knowledge/clinic_faq.md`. It does not guess. If the FAQ has no useful answer it says so and offers to have someone call the patient back.
+The agent answers factual questions by searching `knowledge/clinic_faq.md`. It does not guess. If the FAQ has no useful answer it says so and offers a callback.
 
 **To update the knowledge base:**
 
 1. Edit `knowledge/clinic_faq.md`
-2. Restart the agent. The index rebuilds automatically on startup.
+2. Restart the agent — the index rebuilds automatically
 
 **Structure:** one `##` heading per topic. Each heading becomes one searchable chunk.
 
@@ -574,12 +621,15 @@ Closed Sundays and public holidays.
 A general consultation is 500 rupees. A follow-up within two weeks is 350 rupees.
 ```
 
-**Index details:**
-- Location: `.lancedb/` (gitignored, rebuilt on every startup)
-- Embedding model: `all-MiniLM-L6-v2` from HuggingFace (~80 MB, downloaded once by `download-files`)
-- Retrieval: top-3 nearest chunks by cosine similarity
+**Index details**
 
-More on the embedding model: [all-MiniLM-L6-v2 on HuggingFace](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2). More on LanceDB: [lancedb.github.io/lancedb](https://lancedb.github.io/lancedb/).
+| Detail | Value |
+|---|---|
+| Index location | `.lancedb/` (gitignored, rebuilt on every startup) |
+| Embedding model | `all-MiniLM-L6-v2` (~80 MB, downloaded once) |
+| Retrieval | Top-3 nearest chunks by cosine similarity |
+
+More on the models: [all-MiniLM-L6-v2 on HuggingFace](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) — [LanceDB docs](https://lancedb.github.io/lancedb/)
 
 ---
 
@@ -604,7 +654,7 @@ reception-agent/
 │   ├── notifications.py           # WhatsApp confirmation after booking
 │   └── transcript.py              # Transcript collection and call_logs write
 ├── sql/
-│   └── create_tables.sql          # Full Supabase schema - run this once to set up
+│   └── create_tables.sql          # Full Supabase schema — run this once to set up
 ├── supabase/
 │   └── functions/
 │       └── seed-slots/
@@ -629,68 +679,64 @@ reception-agent/
 
 ## 8. Adapting for your use case
 
-The clinic persona is a thin configuration layer. The call engine, slot system, memory, WhatsApp, and transcript logging are all business-agnostic. Here is what to change to make this a different kind of receptionist.
+The clinic persona is a thin configuration layer on top of a general-purpose call agent. The voice pipeline, slot system, memory, WhatsApp, and transcripts are all business-agnostic. Here is what to change.
 
-### What to change
+### Configuration map
 
-| What | File | What to update |
+| What to change | File | What to update |
 |---|---|---|
 | Agent name and persona | `prompts/system_prompt.py` | Identity block and opening line |
 | Staff / provider names | `sql/create_tables.sql` | `slots_doctor_check` constraint |
-| Booking flow (what to collect) | `prompts/system_prompt.py` | Booking intent section |
+| Booking flow | `prompts/system_prompt.py` | Booking intent section |
 | Business hours and slot schedule | `sql/create_tables.sql` + `supabase/functions/seed-slots/index.ts` | Seed times and weekdays |
 | FAQ content | `knowledge/clinic_faq.md` | Replace entirely, keep the `##` heading structure |
 | Calendar names | `.env` | `GOOGLE_CALENDAR_ID_*` values |
 | Handoff number | `.env` | `CLINIC_PHONE_NUMBER` |
-| Voice | `agent.py` | Murf voice ID (`en-IN-anisha`), see [murf.ai/voices](https://murf.ai/voices) |
+| Voice | `agent.py` | Murf voice ID — see [murf.ai/voices](https://murf.ai/voices) |
 
-### Example: hair salon
+### Example prompts
 
-**`prompts/system_prompt.py`**
+**Hair salon**
 
 ```
 You are Zara, the AI receptionist for Curl & Cut salon, Indiranagar, Bangalore.
 Opening line: Hello, thanks for calling Curl & Cut. I'm Zara, your AI assistant. How can I help?
 ```
 
-Update the booking intent section to collect: service type (haircut / colour / blowout), stylist preference, date, and time.
+Booking flow: service type (haircut / colour / blowout), stylist preference, date, time.
 
-**`sql/create_tables.sql`** - update the constraint to your staff names:
+`sql/create_tables.sql` — update the provider constraint:
 
 ```sql
 constraint slots_stylist_check check (doctor in ('Aisha', 'Priya', 'Riya'))
 ```
 
-Replace `knowledge/clinic_faq.md` with salon content: services, pricing, cancellation policy, directions.
+Replace `knowledge/clinic_faq.md` with your services, pricing, and cancellation policy.
 
-### Example: legal intake
-
-**`prompts/system_prompt.py`**
+**Legal intake**
 
 ```
-You are Alex, the AI intake assistant for Mehta & Associates.
-Collect: caller name, contact number, matter type (civil / criminal / family / property),
-and a brief description. Then schedule a callback with a solicitor.
+You are Alex, the AI intake assistant for Mehta & Associates. Collect: caller name,
+contact number, matter type (civil / criminal / family / property), and a brief description.
+Then schedule a callback with a solicitor.
 ```
 
-For callback-only intake with no live slot booking, replace `book_appointment` with a lighter tool that logs the inquiry and records a preferred callback time. The rest of the pipeline (memory, transcripts, WhatsApp) still works as-is.
+For callback-only intake, replace `book_appointment` with a lighter tool that logs the inquiry and records a preferred callback time. Memory, transcripts, and WhatsApp all still work as-is.
 
-### Example: restaurant reservations
-
-**`prompts/system_prompt.py`**
+**Restaurant reservations**
 
 ```
-You are Anaya, reservations AI for The Spice Room.
-Collect: guest name, contact number, date, time, party size, and dietary requirements.
+You are Anaya, reservations AI for The Spice Room. Collect: guest name, contact number,
+date, time, party size, and any dietary requirements.
 ```
 
-**`sql/create_tables.sql`** - the `slots` table works naturally for table-time pairs. Use table names as the provider values:
+The `slots` table works naturally for table-time pairs. Update the provider constraint to table names:
 
 ```sql
 constraint slots_table_check check (doctor in ('Table 1', 'Table 2', 'Table 3', 'Terrace'))
 ```
 
-Update `supabase/functions/seed-slots/index.ts` for your opening hours, days of the week, and booking interval.
+Update `supabase/functions/seed-slots/index.ts` for your opening hours, days, and booking interval.
 
 ---
 
@@ -699,35 +745,35 @@ Update `supabase/functions/seed-slots/index.ts` for your opening hours, days of 
 | Error | Cause | Fix |
 |---|---|---|
 | `Required environment variable 'X' is not set` | Missing `.env` value | Copy `.env.example` to `.env` and fill in the variable |
-| Agent answers but stays silent | Dispatch rule has no `agents` block | Edit the rule in LiveKit Cloud and add `agentName: clinic-agent` to the `roomConfig.agents` array |
+| Agent answers but stays silent | Dispatch rule has no `agents` block | Edit the rule in LiveKit Cloud — add `agentName: clinic-agent` to `roomConfig.agents` |
 | `DuplexClosed` in logs, call drops mid-greeting | `dev` mode restarts on file save | Use `python agent.py start` for all phone testing |
 | Call drops immediately | TwiML Bin not reachable, or `<Sip>` URI missing `;transport=tcp` | Check the URI in the TwiML Bin and add `;transport=tcp` at the end |
-| `ERROR: relation "slots" does not exist` | Ran only part of `create_tables.sql` | Select the entire file (Ctrl+A) and run it again from the top |
-| `Table "slots" is missing` at seed time | Same as above | Same fix: run the whole file, not just the seed block at the bottom |
+| `ERROR: relation "slots" does not exist` | Ran only part of `create_tables.sql` | Select the full file (Ctrl+A) and run it again from the top |
+| `Table "slots" is missing` at seed time | Same as above | Same fix — the seed block at the bottom requires the tables above it |
 | `401` or `403` from Murf or Deepgram | Wrong or expired API key | Re-check `MURF_API_KEY` and `DEEPGRAM_API_KEY` in `.env` |
 | WhatsApp message not delivered | Recipient has not joined the sandbox | Send `join <keyword>` from the recipient's WhatsApp to the sandbox number |
-| Calendar events not appearing | Service account not shared with the calendar | Go to each calendar's settings and share it with the service account email with edit permissions |
-| Slot coverage warning on startup | Fewer than 14 days of available slots | Run the manual seed SQL or POST to the Edge Function URL |
+| Calendar events not appearing | Service account not shared with the calendar | Go to each calendar's settings and share it with edit permissions to the service account email |
+| Slot coverage warning on startup | Fewer than 14 days of available slots ahead | Run the manual seed SQL or POST to the Edge Function URL |
 
 ---
 
 ## 10. Resources
 
-**Services used in this project**
+**Services**
 
-- [LiveKit Cloud](https://cloud.livekit.io) - agent hosting and SIP telephony
-- [LiveKit Agents Playground](https://agents-playground.livekit.io/) - browser-based testing, no phone needed
+- [LiveKit Cloud](https://cloud.livekit.io) — agent hosting and SIP telephony
+- [LiveKit Agents Playground](https://agents-playground.livekit.io/) — browser-based testing, no phone needed
 - [LiveKit docs: Accepting inbound Twilio calls](https://docs.livekit.io/telephony/accepting-calls/inbound-twilio/)
-- [Deepgram console](https://console.deepgram.com) - speech to text API keys
-- [Google AI Studio](https://aistudio.google.com) - Gemini API keys
-- [Murf AI](https://murf.ai) - text to speech, [voice library](https://murf.ai/voices)
-- [Twilio console](https://console.twilio.com) - phone numbers, TwiML Bins, SIP trunking
+- [Deepgram console](https://console.deepgram.com)
+- [Google AI Studio](https://aistudio.google.com) — Gemini API keys
+- [Murf AI](https://murf.ai) — [voice library](https://murf.ai/voices)
+- [Twilio console](https://console.twilio.com)
 - [Twilio WhatsApp sandbox](https://www.twilio.com/console/sms/whatsapp/sandbox)
-- [Supabase](https://supabase.com) - database, Edge Functions, pg_cron
-- [Google Cloud Console](https://console.cloud.google.com) - service accounts for Calendar
+- [Supabase](https://supabase.com)
+- [Google Cloud Console](https://console.cloud.google.com) — service accounts for Calendar
 
 **Libraries and models**
 
-- [LanceDB](https://lancedb.github.io/lancedb/) - vector database for FAQ search
-- [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) - embedding model for FAQ indexing
-- [Silero VAD](https://github.com/snakers4/silero-vad) - voice activity detection
+- [LanceDB](https://lancedb.github.io/lancedb/) — vector store for FAQ search
+- [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) — FAQ embedding model
+- [Silero VAD](https://github.com/snakers4/silero-vad) — voice activity detection
