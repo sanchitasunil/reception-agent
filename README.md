@@ -151,6 +151,20 @@ python agent.py download-files
 
 Downloads Silero VAD and the FAQ embedding model (`all-MiniLM-L6-v2`, ~80 MB on first run) and builds the LanceDB index. Watch for `FAQ index built: N chunks` in the output.
 
+### Run the agent
+
+```bash
+# Browser testing — no phone needed
+python agent.py dev
+```
+
+```bash
+# Phone testing — stable, no file-watcher restarts
+python agent.py start
+```
+
+For `dev` mode, open the [LiveKit Agents Playground](https://agents-playground.livekit.io/), connect with your LiveKit URL, API key, and secret, and talk to the agent with your microphone.
+
 ### Check all API connections
 
 Run this before starting the agent for the first time. It pings every service and prints a clear OK or FAIL.
@@ -160,14 +174,6 @@ python scripts/check_apis.py
 ```
 
 Fix any failures before continuing.
-
-### Test in the browser — no phone needed
-
-```bash
-python agent.py dev
-```
-
-Open the [LiveKit Agents Playground](https://agents-playground.livekit.io/), connect with your LiveKit URL, API key, and secret, and talk to the agent with your microphone.
 
 ---
 
@@ -265,8 +271,6 @@ python agent.py dev
 ```
 
 Call your Twilio number. The agent should answer within 2-3 rings.
-
-The SIP monitor starts automatically alongside the agent. It polls LiveKit every second and dispatches `clinic-agent` to any new SIP room that does not already have an agent — this works around a known issue where LiveKit's `room_config.agents` auto-dispatch does not fire reliably for SIP-created rooms.
 
 To watch calls arrive and leave in real time:
 
