@@ -55,11 +55,13 @@ Open `.env` and fill in:
 
 > **Note on voice:** The agent uses `en-IN-anisha` as the Murf voice. Check [murf.ai/voices](https://murf.ai/voices) for available Falcon voice IDs and update `agent.py` if needed.
 
-### 5. Download the Silero VAD model
+### 5. Download models and build the FAQ index
 
 ```bash
 python agent.py download-files
 ```
+
+Downloads the Silero VAD model, the FAQ embedding model (`all-MiniLM-L6-v2`, ~80MB on first run), and builds the LanceDB index. You should see `FAQ index built: 12 chunks` (or similar) in the logs.
 
 ### 6. Run the agent in dev mode
 
@@ -183,15 +185,90 @@ Edge cases:
 
 ---
 
+## Google Calendar setup
+
+Supabase `slots` is the source of truth for availability. Google Calendar is a **write-only mirror** for clinic staff — the agent never reads from Calendar.
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a project called "Arogya Clinic"
+2. Enable the Google Calendar API for the project
+3. Go to IAM → Service Accounts → Create service account  
+   Name: `arogya-agent`, Role: none needed at project level
+4. Create a JSON key for the service account and save as `service-account.json` in the project root (gitignored)
+5. Open [Google Calendar](https://calendar.google.com)
+6. Create two new calendars: **Dr. Meera Nair — Arogya** and **Dr. Arun Sharma — Arogya**
+7. For each calendar: Settings → Share with specific people → add the service account email (e.g. `arogya-agent@your-project.iam.gserviceaccount.com`) → **Make changes to events**
+8. Copy each calendar's ID from Settings → Integrate calendar → Calendar ID (e.g. `xxxxxxx@group.calendar.google.com`)
+9. Set in `.env`:
+
+```env
+GOOGLE_CALENDAR_CREDENTIALS_JSON=./service-account.json
+GOOGLE_CALENDAR_ID_MEERA=xxxxxxx@group.calendar.google.com
+GOOGLE_CALENDAR_ID_ARUN=xxxxxxx@group.calendar.google.com
+```
+
+**How to test**
+
+Without Calendar configured (default):
+
+- Book an appointment normally
+- Logs should show `Calendar mirror disabled — skipping`
+- Booking, WhatsApp, and Supabase still complete
+
+Quick test without a call:
+
+```bash
+python scripts/test_calendar.py status
+python scripts/test_calendar.py create --dry-run
+python scripts/test_calendar.py create --doctor "Dr. Meera Nair"
+```
+
+With Calendar configured:
+
+1. Complete setup above and restart the agent
+2. Book a test appointment
+3. Within a few seconds, check the doctor's Google Calendar — event shows patient name, reason, and booking ref
+4. Logs should show `Calendar event created: <event_id>`
+
+Failure resilience:
+
+- Set `GOOGLE_CALENDAR_CREDENTIALS_JSON` to a nonexistent path
+- Book an appointment — calendar logs an error; Supabase booking and WhatsApp still succeed
+
+---
+
+## Knowledge base (RAG)
+
+The agent answers FAQ questions by searching `knowledge/clinic_faq.md`.
+
+To update clinic information:
+
+- Edit `knowledge/clinic_faq.md`
+- Restart the agent — the index rebuilds automatically on startup
+
+To add a new topic: add a new `##` section to `clinic_faq.md`.
+Each H2 section is one searchable entry.
+
+Index location: `.lancedb/` (gitignored, auto-generated on startup)
+Embedding model: `all-MiniLM-L6-v2` (~80MB, downloaded on first prewarm)
+Run `python agent.py download-files` before first start to pre-download
+both the Silero VAD model and the embedding model.
+
+---
+
 ## Project structure
 
 ```
 reception-agent/
 ├── agent.py                  # Pipeline setup and LiveKit entrypoint
+├── knowledge/
+│   └── clinic_faq.md         # Clinic knowledge (RAG source, chunked by H2)
 ├── prompts/
-│   └── system_prompt.py      # Clinic persona, FAQ knowledge, booking rules
+│   └── system_prompt.py      # Clinic persona, booking rules, RAG instructions
 ├── tools/
 │   ├── appointment.py        # Booking tools (book, check, list doctors)
+│   ├── booking.py            # Supabase slot find + reserve
+│   ├── calendar_mirror.py    # Google Calendar write-only mirror
+│   ├── faq.py                # LanceDB FAQ index + search_faq tool
 │   ├── memory.py             # Supabase caller memory (lookup, upsert, log)
 │   └── notifications.py      # WhatsApp confirmation after booking
 ├── config.py                 # Env var loading and validation

@@ -30,6 +30,7 @@ from livekit.plugins import murf
 import config  # validates required env vars at import time
 from prompts.system_prompt import build_system_prompt
 from tools.appointment import book_appointment, check_availability, get_doctor_list
+from tools.faq import build_index, search_faq
 from tools.memory import get_patient, increment_call_count
 
 load_dotenv()
@@ -159,13 +160,20 @@ class ClinicAgent(Agent):
     def __init__(self, instructions: str) -> None:
         super().__init__(
             instructions=instructions,
-            tools=[book_appointment, check_availability, get_doctor_list],
+            tools=[
+                book_appointment,
+                check_availability,
+                get_doctor_list,
+                search_faq,
+            ],
         )
 
 
 def prewarm(proc: JobProcess) -> None:
     """Load VAD weights and pre-synthesize the opening greeting before first call."""
     proc.userdata["vad"] = silero.VAD.load()
+
+    build_index()
 
     # tts_for_calls is kept clean (no asyncio.run() event-loop state).
     tts_for_calls = murf.TTS(voice="en-IN-anisha", locale="en-IN")
@@ -287,6 +295,14 @@ async def entrypoint(ctx: JobContext) -> None:
 
 
 if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) >= 2 and sys.argv[1] == "download-files":
+        from tools.faq import prefetch_embedding_model
+
+        prefetch_embedding_model()
+        build_index()
+
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,

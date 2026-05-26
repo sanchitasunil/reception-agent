@@ -7,6 +7,7 @@ from typing import Any
 
 from livekit.agents import function_tool
 
+from tools.booking import find_available_slot, reserve_slot
 from tools.memory import log_appointment, upsert_patient
 from tools.notifications import send_whatsapp_confirmation
 
@@ -29,9 +30,35 @@ async def book_appointment(
     Use when the caller wants to book a new appointment and has agreed to proceed.
     Do not call without verbal confirmation first.
     """
-    # TODO: replace with real calendar event ID in Phase 3
     booking_id = f"ARG-{random.randint(1000, 9999)}"
-    logger.info(f"Booking confirmed: {booking_id} for {patient_name}")
+
+    slot = await find_available_slot(doctor)
+    if not slot.get("available") or not slot.get("slot_id"):
+        logger.warning("No available slot for %s", doctor)
+        return {
+            "status": "failed",
+            "message": "No available slots for that doctor. Please try another day or doctor.",
+        }
+
+    reserved = await reserve_slot(
+        slot_id=slot["slot_id"],
+        patient_name=patient_name,
+        phone=phone,
+        doctor=doctor,
+        date=date,
+        time=time,
+        reason=reason,
+        booking_id=booking_id,
+        iso_date=slot["iso_date"],
+        iso_time=slot["iso_time"],
+    )
+    if not reserved:
+        return {
+            "status": "failed",
+            "message": "That slot was just taken. Please try another time.",
+        }
+
+    logger.info("Booking confirmed: %s for %s", booking_id, patient_name)
 
     asyncio.create_task(
         send_whatsapp_confirmation(
@@ -76,15 +103,19 @@ async def check_availability(
     Use after you know the preferred date, time, and doctor. If unavailable,
     offer the next_available slot from the tool result.
     """
-    logger.info(f"Checking availability: {doctor} on {date} at {time}")
-    if random.random() < 0.2:
+    logger.info("Checking availability: %s on %s at %s", doctor, date, time)
+    slot = await find_available_slot(doctor)
+    if slot.get("available"):
         return {
-            "available": False,
-            "next_available": f"{date} at ten in the morning",
+            "available": True,
+            "confirmed_slot": f"{slot.get('date', date)} {slot.get('time', time)}",
+            "slot_id": slot.get("slot_id"),
+            "iso_date": slot.get("iso_date"),
+            "iso_time": slot.get("iso_time"),
         }
     return {
-        "available": True,
-        "confirmed_slot": f"{date} {time}",
+        "available": False,
+        "next_available": slot.get("next_available"),
     }
 
 

@@ -62,3 +62,18 @@ TWILIO_WHATSAPP_FROM: str = _require("TWILIO_WHATSAPP_FROM")
 # Supabase — caller memory
 SUPABASE_URL: str = _require("SUPABASE_URL")
 SUPABASE_KEY: str = _require("SUPABASE_KEY")
+
+# Google Calendar mirror (optional — agent works without this)
+GOOGLE_CALENDAR_CREDENTIALS_JSON: str | None = os.getenv("GOOGLE_CALENDAR_CREDENTIALS_JSON")
+GOOGLE_CALENDAR_ID_MEERA: str | None = os.getenv("GOOGLE_CALENDAR_ID_MEERA")
+GOOGLE_CALENDAR_ID_ARUN: str | None = os.getenv("GOOGLE_CALENDAR_ID_ARUN")
+
+
+def calendar_enabled() -> bool:
+    return all(
+        [
+            GOOGLE_CALENDAR_CREDENTIALS_JSON,
+            GOOGLE_CALENDAR_ID_MEERA,
+            GOOGLE_CALENDAR_ID_ARUN,
+        ]
+    )
