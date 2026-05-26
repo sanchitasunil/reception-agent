@@ -50,7 +50,7 @@ Open `.env` and fill in:
 | `TWILIO_ACCOUNT_SID` | console.twilio.com |
 | `TWILIO_AUTH_TOKEN` | console.twilio.com |
 | `TWILIO_PHONE_NUMBER` | Your Twilio phone number in E.164 format |
-| `TWILIO_WHATSAPP_FROM` | Twilio WhatsApp sandbox sender (Phase 3+) |
+| `TWILIO_WHATSAPP_FROM` | Twilio WhatsApp sender (sandbox: `whatsapp:+14155238886`) |
 | `LIVEKIT_SIP_URI` | LiveKit Cloud → Telephony → SIP URI (hostname only) |
 
 > **Note on voice:** The agent uses `en-IN-anisha` as the Murf voice. Check [murf.ai/voices](https://murf.ai/voices) for available Falcon voice IDs and update `agent.py` if needed.
@@ -95,6 +95,28 @@ Docs: [Accepting inbound Twilio calls](https://docs.livekit.io/telephony/accepti
 
 ---
 
+## WhatsApp setup
+
+After a successful booking, Priya sends a WhatsApp confirmation via Twilio in the background (the voice agent does not wait for delivery).
+
+1. Go to [twilio.com/console/sms/whatsapp/sandbox](https://www.twilio.com/console/sms/whatsapp/sandbox)
+2. Send `join <your-sandbox-keyword>` from the patient's WhatsApp to +1 415 523 8886
+3. Set `TWILIO_WHATSAPP_FROM=whatsapp:+14155238886` in `.env`
+4. The number you send **from** in code must match `TWILIO_WHATSAPP_FROM`
+5. The number you send **to** must have joined the sandbox — for production, apply for a WhatsApp Business number via Twilio and remove the sandbox restriction
+
+The sandbox requires each recipient number to opt in once. That is fine for testing, not for real patients — use a production WhatsApp Business number when you go live.
+
+**How to test**
+
+1. Quick test without a call: `python scripts/test_whatsapp_confirmation.py --phone <number>` (add `--dry-run` to preview only)
+2. Or complete a test booking (phone call or Playground)
+3. Priya should confirm the booking ID immediately with no extra pause
+4. Within 5–10 seconds, WhatsApp should arrive on the patient's number
+5. Check logs for the Twilio message SID (success) or an error line (failure)
+
+---
+
 ## Project structure
 
 ```
@@ -103,8 +125,8 @@ reception-agent/
 ├── prompts/
 │   └── system_prompt.py      # Clinic persona, FAQ knowledge, booking rules
 ├── tools/
-│   ├── __init__.py
-│   └── appointment.py        # Stub tool functions (book, check, list doctors)
+│   ├── appointment.py        # Booking tools (book, check, list doctors)
+│   └── notifications.py      # WhatsApp confirmation after booking
 ├── config.py                 # Env var loading and validation
 ├── scripts/
 │   └── setup_twilio_sip.py   # One-time Twilio + LiveKit SIP setup

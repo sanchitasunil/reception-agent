@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import random
 from typing import Any
 
 from livekit.agents import function_tool
+
+from tools.notifications import send_whatsapp_confirmation
 
 logger = logging.getLogger("clinic-agent.tools")
 
@@ -25,8 +28,22 @@ async def book_appointment(
     Use when the caller wants to book a new appointment and has agreed to proceed.
     Do not call without verbal confirmation first.
     """
+    # TODO: replace with real calendar event ID in Phase 3
     booking_id = f"ARG-{random.randint(1000, 9999)}"
     logger.info(f"Booking confirmed: {booking_id} for {patient_name}")
+
+    asyncio.create_task(
+        send_whatsapp_confirmation(
+            phone=phone,
+            patient_name=patient_name,
+            doctor=doctor,
+            date=date,
+            time=time,
+            booking_id=booking_id,
+            reason=reason,
+        )
+    )
+
     return {
         "patient_name": patient_name,
         "phone": phone,
