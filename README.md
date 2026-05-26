@@ -266,11 +266,7 @@ python agent.py dev
 
 Call your Twilio number. The agent should answer within 2-3 rings.
 
-> **Calls arrive but the agent stays silent?** Run the SIP monitor as a backup dispatcher in a second terminal. It polls every second and dispatches `clinic-agent` to any new SIP room that does not already have an agent attached.
->
-> ```bash
-> python scripts/sip_monitor.py
-> ```
+The SIP monitor starts automatically alongside the agent. It polls LiveKit every second and dispatches `clinic-agent` to any new SIP room that does not already have an agent — this works around a known issue where LiveKit's `room_config.agents` auto-dispatch does not fire reliably for SIP-created rooms.
 
 To watch calls arrive and leave in real time:
 
@@ -346,7 +342,7 @@ python scripts/test_handoff.py refer --room clinic-XXXX --identity sip-XXXX
 |---|---|
 | Call drops immediately | Confirm the TwiML Bin URL is reachable and the `<Sip>` URI ends with `;transport=tcp` |
 | Agent does not answer | Run `python scripts/diagnose_telephony.py`. Check `agent.py` is running and the dispatch rule has `agentName: clinic-agent` in the `agents` block |
-| Agent answers but stays silent | The dispatch rule is missing the `agents` block. Edit it in LiveKit Cloud. Also try `python scripts/sip_monitor.py` in a second terminal |
+| Agent answers but stays silent | The dispatch rule is missing the `agents` block. Edit it in LiveKit Cloud and add `agentName: clinic-agent` to `roomConfig.agents` |
 | Call drops mid-greeting | Use `python agent.py start` for phone testing. The `dev` mode restarts on every file save, which drops active calls |
 | Audio cuts out | Run `python agent.py download-files` to re-verify Silero VAD |
 
@@ -662,7 +658,7 @@ reception-agent/
 ├── scripts/
 │   ├── check_apis.py              # Test all API keys before first run
 │   ├── setup_twilio_sip.py        # One-time Twilio + LiveKit SIP setup
-│   ├── sip_monitor.py             # Backup dispatcher for SIP rooms
+│   ├── sip_monitor.py             # Backup dispatcher for SIP rooms (auto-started by agent.py)
 │   ├── watch_calls.py             # Real-time call arrival monitor
 │   ├── diagnose_telephony.py      # Check SIP trunk and dispatch rule config
 │   ├── fix_sip_trunk.py           # Fix trunk phone number mismatch

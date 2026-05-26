@@ -350,6 +350,26 @@ async def entrypoint(ctx: JobContext) -> None:
     logger.info("Room %s disconnected", ctx.room.name)
 
 
+def _start_sip_monitor() -> None:
+    """
+    Spawn sip_monitor.py as a companion subprocess.
+
+    LiveKit's room_config.agents auto-dispatch does not fire reliably for
+    SIP-created rooms. The monitor polls every second and manually dispatches
+    clinic-agent to any new clinic- room that has a SIP participant but no agent.
+    It is terminated automatically when this process exits.
+    """
+    import atexit
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    script = Path(__file__).parent / "scripts" / "sip_monitor.py"
+    proc = subprocess.Popen([sys.executable, str(script)])
+    atexit.register(proc.terminate)
+    logger.info("SIP monitor started (pid=%d)", proc.pid)
+
+
 if __name__ == "__main__":
     import sys
 
@@ -358,6 +378,8 @@ if __name__ == "__main__":
 
         prefetch_embedding_model()
         build_index()
+    else:
+        _start_sip_monitor()
 
     cli.run_app(
         WorkerOptions(
