@@ -177,7 +177,7 @@ Fix any failures before continuing.
 
 ---
 
-## 2. Telephony, WhatsApp, and call handoff
+## 2. Telephony, WhatsApp, and Call handoff
 
 Everything call-related in one place: routing real phone calls to the agent, sending WhatsApp confirmations, and transferring to a human.
 
@@ -290,7 +290,7 @@ Prefer a script over the dashboard? This sets up the SIP trunk and dispatch rule
 python scripts/setup_twilio_sip.py
 ```
 
-### WhatsApp confirmations
+### WhatsApp Confirmations
 
 After every booking the agent sends a WhatsApp message to the patient. No extra setup beyond the `.env` values above.
 
@@ -311,7 +311,7 @@ python scripts/test_whatsapp_confirmation.py --phone +919876543210 --dry-run
 
 The confirmation should arrive within 5-10 seconds of a booking. Check logs for the Twilio message SID on success, or an error line on failure.
 
-### Call handoff
+### Call Handoff
 
 When a caller asks to speak to a human, the agent cold-transfers the live call to a real phone via SIP REFER.
 
@@ -340,7 +340,7 @@ python scripts/test_handoff.py rooms
 python scripts/test_handoff.py refer --room clinic-XXXX --identity sip-XXXX
 ```
 
-### Telephony troubleshooting
+### Telephony Troubleshooting
 
 | Symptom | Fix |
 |---|---|
