@@ -36,12 +36,12 @@ def _fail(step: str, exc: Exception) -> None:
 
 
 def _twiml_body(sip_uri: str, twilio_number: str) -> str:
-    # Twilio's TwiML validator rejects bare '+' in SIP URI user parts.
-    e164 = twilio_number.replace("+", "%2B")
+    # LiveKit SIP does not URL-decode the user part — use bare digits (no + or %2B).
+    bare = twilio_number.lstrip("+")
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial>
-    <Sip>sip:{e164}@{sip_uri};transport=tcp</Sip>
+    <Sip>sip:{bare}@{sip_uri};transport=tcp</Sip>
   </Dial>
 </Response>"""
 

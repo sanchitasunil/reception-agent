@@ -53,7 +53,7 @@ Open `.env` and fill in:
 | `TWILIO_WHATSAPP_FROM` | Twilio WhatsApp sandbox sender (Phase 3+) |
 | `LIVEKIT_SIP_URI` | LiveKit Cloud → Telephony → SIP URI (hostname only) |
 
-> **Note on voice:** The agent uses `en-IN-priya` as the Murf voice. Check [murf.ai/voices](https://murf.ai/voices) for available Falcon voice IDs and update `agent.py` if needed.
+> **Note on voice:** The agent uses `en-IN-anisha` as the Murf voice. Check [murf.ai/voices](https://murf.ai/voices) for available Falcon voice IDs and update `agent.py` if needed.
 
 ### 5. Download the Silero VAD model
 

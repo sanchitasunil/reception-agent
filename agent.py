@@ -23,6 +23,7 @@ from livekit.agents import (
 from livekit.agents import tts as agents_tts
 from livekit.agents.tts import AudioEmitter
 from livekit.agents.types import APIConnectOptions
+from livekit.agents.utils import http_context as _http_ctx
 from livekit.plugins import deepgram, google, silero
 from livekit.plugins import murf
 
@@ -108,6 +109,13 @@ class CachedGreetingTTS(agents_tts.TTS):
             )
         return self._inner.synthesize(text, conn_options=conn_options)
 
+    def stream(
+        self,
+        *,
+        conn_options: APIConnectOptions = APIConnectOptions(),
+    ) -> agents_tts.SynthesizeStream:
+        return self._inner.stream(conn_options=conn_options)
+
     async def aclose(self) -> None:
         await self._inner.aclose()
 
@@ -126,12 +134,16 @@ def prewarm(proc: JobProcess) -> None:
     """Load VAD weights and pre-synthesize the opening greeting before first call."""
     proc.userdata["vad"] = silero.VAD.load()
 
-    tts_instance = murf.TTS(voice="en-IN-anisha", locale="en-IN")
+    # tts_for_calls is kept clean (no asyncio.run() event-loop state).
+    tts_for_calls = murf.TTS(voice="en-IN-anisha", locale="en-IN")
 
     async def _synthesise_greeting() -> list[rtc.AudioFrame]:
+        # Throwaway instance: used only here so tts_for_calls stays uncontaminated.
+        tts_tmp = murf.TTS(voice="en-IN-anisha", locale="en-IN")
         frames: list[rtc.AudioFrame] = []
-        async for audio in tts_instance.synthesize(OPENING_LINE):
-            frames.append(audio.frame)
+        async with _http_ctx.open():
+            async for audio in tts_tmp.synthesize(OPENING_LINE):
+                frames.append(audio.frame)
         return frames
 
     try:
@@ -140,10 +152,10 @@ def prewarm(proc: JobProcess) -> None:
         logger.info(
             "Greeting pre-synthesized: %d frames, %.1fs audio", len(greeting_frames), total_s
         )
-        proc.userdata["tts"] = CachedGreetingTTS(tts_instance, OPENING_LINE, greeting_frames)
+        proc.userdata["tts"] = CachedGreetingTTS(tts_for_calls, OPENING_LINE, greeting_frames)
     except Exception:
         logger.exception("Greeting pre-synthesis failed — will synthesize on first call")
-        proc.userdata["tts"] = tts_instance
+        proc.userdata["tts"] = tts_for_calls
 
 
 def _is_phone_room(room_name: str) -> bool:
@@ -202,7 +214,7 @@ async def entrypoint(ctx: JobContext) -> None:
     tts_instance = ctx.proc.userdata.get("tts") or murf.TTS(voice="en-IN-anisha", locale="en-IN")
     session = AgentSession(
         stt=deepgram.STT(model="nova-3", language="en-IN"),
-        llm=google.LLM(model="gemini-2.5-flash"),
+        llm=google.LLM(model="gemini-2.0-flash"),
         tts=tts_instance,
         vad=ctx.proc.userdata["vad"],
     )

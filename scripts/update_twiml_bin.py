@@ -15,12 +15,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config  # noqa: E402
 from twilio.rest import Client
 
-# Twilio's TwiML validator rejects bare '+' in SIP URI user parts; %2B is equivalent.
-_e164 = (config.TWILIO_PHONE_NUMBER or "").replace("+", "%2B")
+# LiveKit SIP does not URL-decode the user part — use bare digits (no + or %2B).
+_bare = (config.TWILIO_PHONE_NUMBER or "").lstrip("+")
 TWIML_BODY = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial>
-    <Sip>sip:{_e164}@{config.LIVEKIT_SIP_URI};transport=tcp</Sip>
+    <Sip>sip:{_bare}@{config.LIVEKIT_SIP_URI};transport=tcp</Sip>
   </Dial>
 </Response>"""
 
