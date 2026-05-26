@@ -102,3 +102,23 @@ GENERAL
 
 Keep responses brief. Do not repeat information the caller already gave. If unsure, say you will check and offer a callback.
 """.strip()
+
+
+def build_system_prompt(patient: dict | None) -> str:
+    if patient is None:
+        return SYSTEM_PROMPT
+
+    memory_block = f"""
+## Caller memory
+You already know this caller. Do not ask for their name or phone number again.
+- Name: {patient['name']}
+- Preferred doctor: {patient.get('preferred_doctor', 'no preference recorded')}
+- Last appointment: {patient.get('last_appointment_date', 'unknown')} at {patient.get('last_appointment_time', 'unknown')} with {patient.get('preferred_doctor', 'unknown')}
+- Last booking ref: {patient.get('last_booking_id', 'unknown')}
+- Times called before: {patient.get('call_count', 1)}
+
+Greet them warmly by name. Example opening:
+"Hello {patient['name']}, welcome back to Arogya Clinic. How can I help you today?"
+Do not say "How may I know your name" — you already know it.
+"""
+    return SYSTEM_PROMPT + memory_block

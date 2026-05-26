@@ -58,3 +58,7 @@ TWILIO_PHONE_NUMBER: str | None = os.getenv("TWILIO_PHONE_NUMBER") or os.getenv(
     "TWILLIO_PHONE_NUMBER"
 )
 TWILIO_WHATSAPP_FROM: str = _require("TWILIO_WHATSAPP_FROM")
+
+# Supabase — caller memory
+SUPABASE_URL: str = _require("SUPABASE_URL")
+SUPABASE_KEY: str = _require("SUPABASE_KEY")

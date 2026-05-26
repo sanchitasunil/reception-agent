@@ -117,6 +117,72 @@ The sandbox requires each recipient number to opt in once. That is fine for test
 
 ---
 
+## Memory setup (Supabase)
+
+Persistent caller memory lets Priya greet returning patients by name and reference their last appointment.
+
+1. Go to [supabase.com](https://supabase.com), create a free project (free tier: 500MB, no expiry)
+2. In the SQL editor, run the schema below
+3. Copy the project URL and anon key from Settings → API
+4. Set `SUPABASE_URL` and `SUPABASE_KEY` in `.env`
+
+```sql
+CREATE TABLE patients (
+    phone TEXT PRIMARY KEY,
+    name TEXT,
+    preferred_doctor TEXT,
+    last_booking_id TEXT,
+    last_appointment_date TEXT,
+    last_appointment_time TEXT,
+    call_count INTEGER DEFAULT 1,
+    first_seen TIMESTAMPTZ DEFAULT NOW(),
+    last_seen TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE appointments (
+    id TEXT PRIMARY KEY,
+    phone TEXT REFERENCES patients(phone),
+    doctor TEXT,
+    date TEXT,
+    time TEXT,
+    reason TEXT,
+    booking_id TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+**How to test**
+
+Quick test without a call:
+
+```bash
+python scripts/test_memory.py lookup --phone 9876543210
+python scripts/test_memory.py book --phone 9876543210
+python scripts/test_memory.py call --phone 9876543210
+python scripts/test_memory.py prompt --phone 9876543210
+python scripts/test_memory.py flow --phone 9876543210
+```
+
+First call (new number):
+
+- Priya asks for your name as normal
+- After booking, check Supabase dashboard → `patients` table → row should appear
+- Check `appointments` table → row should appear with `booking_id`
+
+Second call (same number):
+
+- Priya should greet you by name immediately without asking
+- She should not ask for your phone number
+- `call_count` in `patients` should have incremented
+
+Edge cases:
+
+- Call without booking → `call_count` increments, no patient/appointment rows written
+- Supabase is down → `get_patient` returns `None` → Priya behaves as first-time caller (graceful fallback)
+- Caller phone not available in SIP metadata → `patient_memory` is `None` → normal flow
+
+---
+
 ## Project structure
 
 ```
@@ -126,6 +192,7 @@ reception-agent/
 │   └── system_prompt.py      # Clinic persona, FAQ knowledge, booking rules
 ├── tools/
 │   ├── appointment.py        # Booking tools (book, check, list doctors)
+│   ├── memory.py             # Supabase caller memory (lookup, upsert, log)
 │   └── notifications.py      # WhatsApp confirmation after booking
 ├── config.py                 # Env var loading and validation
 ├── scripts/

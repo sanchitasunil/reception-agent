@@ -28,8 +28,9 @@ from livekit.plugins import deepgram, google, silero
 from livekit.plugins import murf
 
 import config  # validates required env vars at import time
-from prompts.system_prompt import SYSTEM_PROMPT
+from prompts.system_prompt import build_system_prompt
 from tools.appointment import book_appointment, check_availability, get_doctor_list
+from tools.memory import get_patient, increment_call_count
 
 load_dotenv()
 
@@ -41,6 +42,38 @@ OPENING_LINE = (
     "Hello, thank you for calling Arogya Clinic. I'm Priya, your AI "
     "receptionist. How may I help you today?"
 )
+
+
+def _opening_line_for_patient(patient_memory: dict | None) -> str:
+    if patient_memory and patient_memory.get("name"):
+        name = patient_memory["name"]
+        return (
+            f"Hello {name}, welcome back to Arogya Clinic. I'm Priya, your AI "
+            f"receptionist. How can I help you today?"
+        )
+    return OPENING_LINE
+
+
+def _sip_caller_phone(participant: rtc.RemoteParticipant) -> str | None:
+    if participant.kind != rtc.ParticipantKind.SIP:
+        return None
+    return participant.attributes.get("sip.phoneNumber") or participant.identity
+
+
+async def _resolve_caller_phone(ctx: JobContext, is_phone: bool) -> str | None:
+    if not is_phone:
+        return None
+
+    for participant in ctx.room.remote_participants.values():
+        phone = _sip_caller_phone(participant)
+        if phone:
+            return phone
+
+    try:
+        participant = await asyncio.wait_for(ctx.wait_for_participant(), timeout=10.0)
+        return _sip_caller_phone(participant)
+    except asyncio.TimeoutError:
+        return None
 
 
 # ── Pre-synthesized greeting cache ────────────────────────────────────────────
@@ -123,9 +156,9 @@ class CachedGreetingTTS(agents_tts.TTS):
 # ── Agent ──────────────────────────────────────────────────────────────────────
 
 class ClinicAgent(Agent):
-    def __init__(self) -> None:
+    def __init__(self, instructions: str) -> None:
         super().__init__(
-            instructions=SYSTEM_PROMPT,
+            instructions=instructions,
             tools=[book_appointment, check_availability, get_doctor_list],
         )
 
@@ -163,10 +196,13 @@ def _is_phone_room(room_name: str) -> bool:
 
 
 async def _greet_phone_caller(
-    ctx: JobContext, session: AgentSession, t0: float
+    ctx: JobContext,
+    session: AgentSession,
+    t0: float,
+    opening_line: str,
 ) -> None:
     """Play opening greeting; TTS is fired immediately to overlap with participant-join wait."""
-    handle = session.say(OPENING_LINE, allow_interruptions=False)
+    handle = session.say(opening_line, allow_interruptions=False)
     logger.info("Greeting started at %.1fs", time.monotonic() - t0)
 
     participant: rtc.RemoteParticipant | None = None
@@ -219,12 +255,26 @@ async def entrypoint(ctx: JobContext) -> None:
         vad=ctx.proc.userdata["vad"],
     )
 
-    await session.start(ClinicAgent(), room=ctx.room)
+    caller_phone = await _resolve_caller_phone(ctx, is_phone)
+    patient_memory = None
+    if caller_phone:
+        patient_memory = await get_patient(caller_phone)
+        asyncio.create_task(increment_call_count(caller_phone))
+        logger.info(
+            "Caller %s memory=%s",
+            caller_phone,
+            patient_memory.get("name") if patient_memory else "new",
+        )
+
+    prompt = build_system_prompt(patient_memory)
+    opening_line = _opening_line_for_patient(patient_memory)
+
+    await session.start(ClinicAgent(prompt), room=ctx.room)
     logger.info("Session started (%.1fs)", time.monotonic() - t0)
 
     if is_phone:
         try:
-            await _greet_phone_caller(ctx, session, t0)
+            await _greet_phone_caller(ctx, session, t0, opening_line)
         except asyncio.TimeoutError:
             logger.error("Phone greeting timed out — call may have dropped")
         except Exception:

@@ -7,6 +7,7 @@ from typing import Any
 
 from livekit.agents import function_tool
 
+from tools.memory import log_appointment, upsert_patient
 from tools.notifications import send_whatsapp_confirmation
 
 logger = logging.getLogger("clinic-agent.tools")
@@ -42,6 +43,12 @@ async def book_appointment(
             booking_id=booking_id,
             reason=reason,
         )
+    )
+    asyncio.create_task(
+        upsert_patient(phone, patient_name, doctor, booking_id, date, time)
+    )
+    asyncio.create_task(
+        log_appointment(phone, doctor, date, time, reason, booking_id)
     )
 
     return {
