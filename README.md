@@ -1,6 +1,6 @@
-# Arogya Clinic — Voice Agent
+# Reception Agent — AI Phone Receptionist
 
-AI phone receptionist for Arogya Clinic (Koramangala, Bangalore). Answers inbound calls via Twilio, handles appointment booking and FAQs.
+An AI voice agent that answers inbound calls, books appointments, handles FAQs, and sends WhatsApp confirmations. Shipped as a clinic receptionist (Arogya Clinic, Bangalore) but designed to be adapted for any appointment-based business.
 
 **Stack:** LiveKit Agents · Deepgram Nova-3 (STT) · Gemini Flash (LLM) · Murf Falcon (TTS) · Silero (VAD)
 
@@ -19,10 +19,16 @@ cd reception-agent
 
 ```bash
 python -m venv venv
+```
+
+```bash
 # macOS / Linux
 source venv/bin/activate
-# Windows
-venv\Scripts\activate
+```
+
+```powershell
+# Windows (PowerShell)
+venv\Scripts\Activate.ps1
 ```
 
 ### 3. Install dependencies
@@ -34,7 +40,13 @@ pip install -r requirements.txt
 ### 4. Configure environment variables
 
 ```bash
+# macOS / Linux
 cp .env.example .env
+```
+
+```powershell
+# Windows (PowerShell)
+Copy-Item .env.example .env
 ```
 
 Open `.env` and fill in:
@@ -44,6 +56,7 @@ Open `.env` and fill in:
 | `LIVEKIT_URL` | LiveKit Cloud dashboard → your project |
 | `LIVEKIT_API_KEY` | LiveKit Cloud → Settings → API Keys |
 | `LIVEKIT_API_SECRET` | Same as above |
+| `LIVEKIT_SIP_URI` | LiveKit Cloud → Telephony → SIP URI (hostname only, no `sip:` prefix) |
 | `DEEPGRAM_API_KEY` | console.deepgram.com |
 | `GOOGLE_API_KEY` | aistudio.google.com → API keys |
 | `MURF_API_KEY` | murf.ai → Settings → API |
@@ -51,9 +64,10 @@ Open `.env` and fill in:
 | `TWILIO_AUTH_TOKEN` | console.twilio.com |
 | `TWILIO_PHONE_NUMBER` | Your Twilio phone number in E.164 format |
 | `TWILIO_WHATSAPP_FROM` | Twilio WhatsApp sender (sandbox: `whatsapp:+14155238886`) |
-| `LIVEKIT_SIP_URI` | LiveKit Cloud → Telephony → SIP URI (hostname only) |
+| `SUPABASE_URL` | Supabase → Settings → API → Project URL |
+| `SUPABASE_KEY` | Supabase → Settings → API → anon/public key |
 
-> **Note on voice:** The agent uses `en-IN-anisha` as the Murf voice. Check [murf.ai/voices](https://murf.ai/voices) for available Falcon voice IDs and update `agent.py` if needed.
+> **Note on voice:** The agent uses `en-IN-anisha` (Murf Falcon). Check [murf.ai/voices](https://murf.ai/voices) for all available Falcon voice IDs and update `agent.py` if needed.
 
 ### 5. Download models and build the FAQ index
 
@@ -61,7 +75,7 @@ Open `.env` and fill in:
 python agent.py download-files
 ```
 
-Downloads the Silero VAD model, the FAQ embedding model (`all-MiniLM-L6-v2`, ~80MB on first run), and builds the LanceDB index. You should see `FAQ index built: 12 chunks` (or similar) in the logs.
+Downloads the Silero VAD model and the FAQ embedding model (`all-MiniLM-L6-v2`, ~80 MB on first run), then builds the LanceDB index. You should see `FAQ index built: 12 chunks` (or similar) in the logs.
 
 ### 6. Run the agent in dev mode
 
@@ -73,149 +87,148 @@ The agent connects to the [LiveKit Agents Playground](https://agents-playground.
 
 ---
 
-## Telephony setup (Phase 2)
+## Database setup (Supabase)
 
-Once Priya works in the playground, connect a real phone number:
+All persistent state — caller memory, slots, bookings, and transcripts — lives in Supabase.
 
-1. Fill in `TWILIO_*` and `LIVEKIT_SIP_URI` in `.env` (SIP URI is the hostname from LiveKit Cloud, e.g. `your-project-id.sip.livekit.cloud` — no `sip:` prefix).
-2. Run: `python scripts/setup_twilio_sip.py`
-3. Run the agent (must stay running during the call):
-   - **Phone testing:** `python agent.py start` (stable, no file-watcher restarts)
+1. Go to [supabase.com](https://supabase.com) and create a free project (500 MB storage, no expiry)
+2. Open `sql/create_tables.sql` from this repo, paste the entire file into the Supabase SQL editor, and run it (**Ctrl+A → Run** — do not run only a portion)
+3. Copy the project URL and anon key from Settings → API and add them to `.env`
+
+The script is safe to re-run — it uses `IF NOT EXISTS` and conditional blocks throughout. The seed block at the bottom inserts 14 days of available slots immediately so the agent can take bookings right away.
+
+### Tables
+
+| Table | Purpose |
+|---|---|
+| `patients` | Caller memory — name, preferred provider, visit history |
+| `slots` | Appointment availability and bookings |
+| `appointments` | Booking audit log with cancellation and reschedule tracking |
+| `call_logs` | Full call transcripts with intent and outcome labels |
+
+The `slots` table has a unique constraint on `(doctor, iso_date, iso_time)` and restricts `status` to `available` or `booked`. See `sql/create_tables.sql` for the full schema and indexes.
+
+---
+
+## Telephony setup (Twilio + LiveKit SIP)
+
+Once the agent works in the Playground, connect a real phone number.
+
+1. Fill in `TWILIO_*` and `LIVEKIT_SIP_URI` in `.env`
+2. Run the one-time setup script:
+
+   ```bash
+   python scripts/setup_twilio_sip.py
+   ```
+
+3. Keep the agent running during calls:
+   - **Phone testing:** `python agent.py start` (stable — no file-watcher restarts)
    - **Playground / dev:** `python agent.py dev`
-4. Call your Twilio number — Priya should answer within 2–3 rings.
+
+4. Call your Twilio number — the agent should answer within 2–3 rings
 
 Do **not** run `test_worker_dispatch.py` while testing phone calls — it steals the worker with empty test rooms.
 
 **Troubleshooting**
 
-- **Call drops immediately:** Check the TwiML Bin URL is reachable and the SIP URI in the bin ends with `;transport=tcp`.
-- **Agent doesn't answer:** Confirm `agent.py` is running and the worker `agent_name` matches the dispatch rule (`clinic-agent`). Run `python scripts/diagnose_telephony.py` — the dispatch rule must list `agents=['clinic-agent']`. A rule with only `room_prefix: call-` and no agents will connect the call but stay silent.
-- **Audio cuts out:** Check Silero VAD downloaded successfully (`python agent.py download-files`).
-- **Call drops mid-greeting:** `agent.py dev` restarts when files change (`DuplexClosed` in logs). Use `python agent.py start` for phone testing instead.
+- **Call drops immediately:** Check the TwiML Bin URL is reachable and the SIP URI in the bin ends with `;transport=tcp`
+- **Agent doesn't answer:** Confirm `agent.py` is running and the `agent_name` matches the dispatch rule (`clinic-agent`). Run `python scripts/diagnose_telephony.py` — the dispatch rule must list `agents=['clinic-agent']`. A rule with only `room_prefix: call-` and no agents will connect the call but stay silent
+- **Audio cuts out:** Run `python agent.py download-files` to re-verify the Silero VAD model
+- **Call drops mid-greeting:** Use `python agent.py start` for phone testing — `dev` mode restarts on file changes (`DuplexClosed` in logs)
 
 Docs: [Accepting inbound Twilio calls](https://docs.livekit.io/telephony/accepting-calls/inbound-twilio/)
 
 ---
 
-## WhatsApp setup
+## WhatsApp confirmations
 
-After a successful booking, Priya sends a WhatsApp confirmation via Twilio in the background (the voice agent does not wait for delivery).
+After a successful booking, the agent sends a WhatsApp confirmation in the background — the voice call does not wait for delivery.
+
+**Sandbox setup (testing)**
 
 1. Go to [twilio.com/console/sms/whatsapp/sandbox](https://www.twilio.com/console/sms/whatsapp/sandbox)
 2. Send `join <your-sandbox-keyword>` from the patient's WhatsApp to +1 415 523 8886
 3. Set `TWILIO_WHATSAPP_FROM=whatsapp:+14155238886` in `.env`
-4. The number you send **from** in code must match `TWILIO_WHATSAPP_FROM`
-5. The number you send **to** must have joined the sandbox — for production, apply for a WhatsApp Business number via Twilio and remove the sandbox restriction
 
-The sandbox requires each recipient number to opt in once. That is fine for testing, not for real patients — use a production WhatsApp Business number when you go live.
+Each recipient must opt in once. For production, apply for a WhatsApp Business number via Twilio and remove the sandbox restriction.
 
 **How to test**
 
-1. Quick test without a call: `python scripts/test_whatsapp_confirmation.py --phone <number>` (add `--dry-run` to preview only)
-2. Or complete a test booking (phone call or Playground)
-3. Priya should confirm the booking ID immediately with no extra pause
-4. Within 5–10 seconds, WhatsApp should arrive on the patient's number
-5. Check logs for the Twilio message SID (success) or an error line (failure)
+```bash
+python scripts/test_whatsapp_confirmation.py --phone +919876543210
+python scripts/test_whatsapp_confirmation.py --phone +919876543210 --dry-run  # preview only
+```
+
+Or complete a test booking — a WhatsApp confirmation should arrive within 5–10 seconds. Check logs for the Twilio message SID (success) or an error line (failure).
 
 ---
 
-## Memory setup (Supabase)
+## Caller memory
 
-Persistent caller memory lets Priya greet returning patients by name and reference their last appointment.
+Persistent memory lets the agent greet returning callers by name and skip collecting their phone number again.
 
-1. Go to [supabase.com](https://supabase.com), create a free project (free tier: 500MB, no expiry)
-2. In the SQL editor, run the schema below
-3. Copy the project URL and anon key from Settings → API
-4. Set `SUPABASE_URL` and `SUPABASE_KEY` in `.env`
+**How it works**
 
-```sql
-CREATE TABLE patients (
-    phone TEXT PRIMARY KEY,
-    name TEXT,
-    preferred_doctor TEXT,
-    last_booking_id TEXT,
-    last_appointment_date TEXT,
-    last_appointment_time TEXT,
-    call_count INTEGER DEFAULT 1,
-    first_seen TIMESTAMPTZ DEFAULT NOW(),
-    last_seen TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE appointments (
-    id TEXT PRIMARY KEY,
-    phone TEXT REFERENCES patients(phone),
-    doctor TEXT,
-    date TEXT,
-    time TEXT,
-    reason TEXT,
-    booking_id TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
+On each call, the agent reads the caller's phone number from SIP metadata. If a matching row exists in `patients`, their name and last booking details are injected into the system prompt before the call begins. After a successful booking, `patients` and `appointments` are upserted.
 
 **How to test**
-
-Quick test without a call:
 
 ```bash
 python scripts/test_memory.py lookup --phone 9876543210
-python scripts/test_memory.py book --phone 9876543210
-python scripts/test_memory.py call --phone 9876543210
+python scripts/test_memory.py book   --phone 9876543210
+python scripts/test_memory.py call   --phone 9876543210
 python scripts/test_memory.py prompt --phone 9876543210
-python scripts/test_memory.py flow --phone 9876543210
+python scripts/test_memory.py flow   --phone 9876543210
 ```
 
 First call (new number):
-
-- Priya asks for your name as normal
-- After booking, check Supabase dashboard → `patients` table → row should appear
-- Check `appointments` table → row should appear with `booking_id`
+- Agent asks for name as normal
+- After booking, check Supabase → `patients` and `appointments` — rows should appear with `booking_id`
 
 Second call (same number):
-
-- Priya should greet you by name immediately without asking
-- She should not ask for your phone number
+- Agent greets by name, skips the phone number question
 - `call_count` in `patients` should have incremented
 
 Edge cases:
-
-- Call without booking → `call_count` increments, no patient/appointment rows written
-- Supabase is down → `get_patient` returns `None` → Priya behaves as first-time caller (graceful fallback)
-- Caller phone not available in SIP metadata → `patient_memory` is `None` → normal flow
+- Call without booking → `call_count` increments, no `appointments` row written
+- Supabase down → `get_patient` returns `None` → agent behaves as a first-time caller (graceful fallback)
+- No SIP metadata → `patient_memory` is `None` → normal first-call flow
 
 ---
 
-## Cancellation and rescheduling (schema)
+## Appointment management
 
-Run in the Supabase SQL editor (in addition to patients/appointments/slots):
+### Cancellation
 
-```sql
-ALTER TABLE slots ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
-ALTER TABLE appointments ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'confirmed';
-ALTER TABLE appointments ADD COLUMN IF NOT EXISTS rescheduled_from TEXT;
-```
+1. Agent collects the patient's phone number
+2. Calls `cancel_appointment(phone=..., confirmed=False)` — looks up the appointment and reads it back
+3. Asks "Shall I go ahead and cancel?" — waits for explicit yes
+4. Calls `cancel_appointment(phone=..., confirmed=True)` — frees the slot, sends WhatsApp cancellation
 
-`rescheduled_from` on a new appointment row stores the previous `booking_id` after a reschedule.
+### Rescheduling
 
-Slots use `status` (`available` / `booked`), `iso_date`, `iso_time`, `booking_id`, `phone`, `patient_name`, and `reason` — aligned with `tools/booking.py`.
+1. Agent reads back the current booking
+2. Collects preferred new date and time
+3. Finds a slot and confirms — asks "Shall I go ahead with that?"
+4. On yes: old slot freed, new slot booked, WhatsApp reschedule message sent
+
+`rescheduled_from` on the new `appointments` row stores the previous `booking_id`.
 
 **How to test**
 
-Cancellation: book via phone, call again, say you want to cancel, confirm phone, say yes — check `slots.status=available`, `appointments.status=cancelled`, WhatsApp cancellation.
+Cancellation: book via phone or Playground, call again and say you want to cancel, confirm the number, say yes — check `slots.status = 'available'` and `appointments.status = 'cancelled'`.
 
-Reschedule: book, call to reschedule, give new date/time, confirm — old slot freed, new slot booked, WhatsApp reschedule message.
+Reschedule: book, call to reschedule, give a new date/time — check that the old slot was freed and a new slot is booked.
 
 ---
 
-## Slot seeding automation
+## Slot seeding
 
-Slots are auto-seeded by a Supabase Edge Function that runs every Sunday at midnight IST. It ensures at least 30 days of future slots are always available for both doctors.
-
-The `slots` table uses `iso_date`, `iso_time`, and `status` (`available` / `booked`), with a unique constraint on `(doctor, iso_date, iso_time)` — see `sql/create_tables.sql`.
+Slots are seeded by a Supabase Edge Function that runs every Sunday at midnight IST, ensuring at least 30 days of future availability.
 
 ### Deploy the Edge Function
 
-1. Install Supabase CLI:
+1. Install the Supabase CLI:
 
    ```bash
    npm install -g supabase
@@ -228,29 +241,18 @@ The `slots` table uses `iso_date`, `iso_time`, and `status` (`available` / `book
    supabase link --project-ref your-project-ref
    ```
 
-3. Create the function (skip if `supabase/functions/seed-slots/` already exists in this repo):
-
-   ```bash
-   supabase functions new seed-slots
-   ```
-
-4. Use the function source from this repo: `supabase/functions/seed-slots/index.ts` (or replace the generated file with it). It queries the latest `iso_date`, and if fewer than 30 days of coverage remain, inserts `available` slots through today + 60 days (Mon–Sat, morning and evening blocks, both doctors). Upserts are idempotent via `onConflict: doctor,iso_date,iso_time` and `ignoreDuplicates: true`.
-
-5. Deploy the function:
+3. Deploy from this repo (`supabase/functions/seed-slots/index.ts`):
 
    ```bash
    supabase functions deploy seed-slots --no-verify-jwt
    ```
 
-6. Set up the weekly cron schedule in Supabase Dashboard:
-
-   → Database → Extensions → enable `pg_cron` if not already enabled  
-   → Database → SQL Editor → run:
+4. Enable `pg_cron` under Supabase → Database → Extensions, then run this in the SQL editor to schedule the weekly job:
 
    ```sql
    select cron.schedule(
      'seed-slots-weekly',
-     '30 18 * * 0',   -- Sunday 18:30 UTC = midnight IST (Sunday night)
+     '30 18 * * 0',   -- Sunday 18:30 UTC = midnight IST
      $$
      select net.http_post(
        url := 'https://your-project-ref.supabase.co/functions/v1/seed-slots',
@@ -264,63 +266,56 @@ The `slots` table uses `iso_date`, `iso_time`, and `status` (`available` / `book
    );
    ```
 
-   Replace `your-project-ref` with your actual project ref(Your Project ID from Settings -> General -> Project ID).  
-   Replace the Authorization Bearer value with your service role key if `current_setting('app.service_role_key')` is not configured.
+   Replace `your-project-ref` with your project ID (Settings → General → Project ID). If `current_setting('app.service_role_key')` is not configured, replace it with your service role key directly.
 
-7. Test the function manually before relying on the cron.
+### Test the Edge Function
 
-   The Supabase CLI no longer has `functions invoke` (CLI v2+). Call the deployed URL with `curl` instead (use your **service role** key from Dashboard → Settings → API):
+The Supabase CLI no longer has `functions invoke` (CLI v2+). Call the deployed URL with `curl` using your service role key from Dashboard → Settings → API.
 
-   **bash / macOS / Linux:**
+**macOS / Linux:**
 
-   ```bash
-   curl -sS -L -X POST "https://YOUR_PROJECT_REF.supabase.co/functions/v1/seed-slots" \
-     -H "Authorization: Bearer YOUR_SERVICE_ROLE_KEY" \
-     -H "Content-Type: application/json" \
-     -d "{}"
-   ```
+```bash
+curl -sS -X POST "https://YOUR_PROJECT_REF.supabase.co/functions/v1/seed-slots" \
+  -H "Authorization: Bearer YOUR_SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{}"
+```
 
-   **PowerShell (Windows):**
+**Windows (PowerShell):**
 
-   ```powershell
-   curl.exe -sS -L -X POST "https://YOUR_PROJECT_REF.supabase.co/functions/v1/seed-slots" `
-     -H "Authorization: Bearer YOUR_SERVICE_ROLE_KEY" `
-     -H "Content-Type: application/json" `
-     -d "{}"
-   ```
+```powershell
+curl.exe -sS -X POST "https://YOUR_PROJECT_REF.supabase.co/functions/v1/seed-slots" `
+  -H "Authorization: Bearer YOUR_SERVICE_ROLE_KEY" `
+  -H "Content-Type: application/json" `
+  -d "{}"
+```
 
-   Replace `YOUR_PROJECT_REF` and `YOUR_SERVICE_ROLE_KEY`. You must deploy with `--no-verify-jwt` (step 5) so this works without a user JWT.
+Expected response:
 
-   **Local test** (requires Docker + `supabase start`):
+```json
+{"message": "Seeded N slots from YYYY-MM-DD to YYYY-MM-DD"}
+```
 
-   ```bash
-   supabase functions serve seed-slots --no-verify-jwt
-   ```
+Or if slots are already sufficient:
 
-   In another terminal:
+```json
+{"message": "Slots OK — N days ahead. No seeding needed."}
+```
 
-   ```bash
-   curl -sS -L -X POST "http://127.0.0.1:54321/functions/v1/seed-slots" \
-     -H "Authorization: Bearer YOUR_SERVICE_ROLE_KEY" \
-     -H "Content-Type: application/json" \
-     -d "{}"
-   ```
+**Local test** (requires Docker and `supabase start`):
 
-   Expected response:
-
-   ```json
-   {"message": "Seeded N slots from YYYY-MM-DD to YYYY-MM-DD"}
-   ```
-
-   or if slots are already sufficient:
-
-   ```json
-   {"message": "Slots OK — N days ahead. No seeding needed."}
-   ```
+```bash
+supabase functions serve seed-slots --no-verify-jwt
+# In a second terminal:
+curl -sS -X POST "http://127.0.0.1:54321/functions/v1/seed-slots" \
+  -H "Authorization: Bearer YOUR_SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{}"
+```
 
 ### Manual seeding (fallback)
 
-If you need to seed immediately without the Edge Function:
+Run this in the Supabase SQL editor to seed immediately without the Edge Function:
 
 ```sql
 INSERT INTO slots (doctor, iso_date, iso_time, status)
@@ -344,111 +339,74 @@ WHERE EXTRACT(ISODOW FROM date_val::DATE) BETWEEN 1 AND 6
 ON CONFLICT (doctor, iso_date, iso_time) DO NOTHING;
 ```
 
-### Monitoring
-
-Check current slot coverage at any time:
+### Monitor slot coverage
 
 ```sql
 SELECT
-    MIN(iso_date) AS earliest_slot,
-    MAX(iso_date) AS latest_slot,
+    MIN(iso_date)                                AS earliest_slot,
+    MAX(iso_date)                                AS latest_slot,
     COUNT(*) FILTER (WHERE status = 'available') AS available_slots,
-    COUNT(*) FILTER (WHERE status = 'booked') AS booked_slots,
-    MAX(iso_date)::date - CURRENT_DATE AS days_of_coverage
+    COUNT(*) FILTER (WHERE status = 'booked')    AS booked_slots,
+    MAX(iso_date)::date - CURRENT_DATE           AS days_of_coverage
 FROM slots
 WHERE iso_date >= CURRENT_DATE;
 ```
 
-### How to test
-
-**Coverage check at startup**
-
-1. Run: `python agent.py dev`
-2. Logs should show `SLOT COVERAGE: N days ahead — OK`
-3. To test the warning, temporarily delete far-future slots:
-
-   ```sql
-   DELETE FROM slots WHERE iso_date > CURRENT_DATE + INTERVAL '10 days';
-   ```
-
-   Restart the agent — should log a critical warning. Re-run the manual seed SQL to restore.
-
-**Edge Function**
-
-1. Deploy: `supabase functions deploy seed-slots --no-verify-jwt`
-2. POST to the function URL with `curl` (see step 7 above — not `supabase functions invoke`)
-3. Check response JSON and run the monitoring query above
-
-**Idempotency**
-
-1. Run the `curl` POST twice back to back
-2. Second run should report “Slots OK” or seed 0 new rows
-3. No duplicate rows (unique constraint + `ignoreDuplicates`)
-
-**Cron verification**
+### Verify the cron job
 
 ```sql
 SELECT * FROM cron.job WHERE jobname = 'seed-slots-weekly';
 
 SELECT * FROM cron.job_run_details
 WHERE jobid = (SELECT jobid FROM cron.job WHERE jobname = 'seed-slots-weekly')
-ORDER BY start_time DESC
-LIMIT 5;
+ORDER BY start_time DESC LIMIT 5;
 ```
+
+### Coverage check at startup
+
+1. Run `python agent.py dev`
+2. Logs should show `SLOT COVERAGE: N days ahead — OK`
+3. To test the low-coverage warning, delete far-future slots and restart:
+
+   ```sql
+   DELETE FROM slots WHERE iso_date > CURRENT_DATE + INTERVAL '10 days';
+   ```
+
+   Re-run the manual seed SQL above to restore.
 
 ---
 
-## Transcript logging setup
+## Transcript logging
 
-Every call is stored in Supabase `call_logs` when the room disconnects. The agent collects user and assistant speech during the call and writes one row per call.
-
-Run this in the Supabase SQL editor:
-
-```sql
-CREATE TABLE call_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    phone TEXT,
-    started_at TIMESTAMPTZ DEFAULT NOW(),
-    ended_at TIMESTAMPTZ,
-    duration_seconds INTEGER,
-    transcript JSONB,
-    booking_id TEXT,
-    intent TEXT,
-    call_outcome TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX idx_call_logs_phone ON call_logs(phone);
-CREATE INDEX idx_call_logs_started_at ON call_logs(started_at DESC);
-```
-
-The `transcript` column is JSONB — an array of turns:
+Every call is stored as one row in `call_logs` when the room disconnects. The `transcript` column is JSONB — an array of turns:
 
 ```json
 [
   {"role": "agent", "text": "Hello, I'm Priya...", "ts": 0.0},
-  {"role": "user", "text": "Hi I want to book...", "ts": 3.2}
+  {"role": "user",  "text": "Hi I want to book...", "ts": 3.2}
 ]
 ```
 
-- **intent:** `booking`, `faq`, `cancellation`, `reschedule`, or `unknown` (inferred from keywords at call end if not set by a tool)
-- **call_outcome:** `booked`, `cancelled`, `rescheduled`, `answered_faq`, `transferred`, `abandoned`, or `unknown` (set to `booked` when `book_appointment` succeeds)
+| Field | Values |
+|---|---|
+| `intent` | `booking`, `faq`, `cancellation`, `reschedule`, `unknown` |
+| `call_outcome` | `booked`, `cancelled`, `rescheduled`, `answered_faq`, `transferred`, `abandoned`, `unknown` |
 
-**Privacy (DPDP):** `call_logs.phone` is stored in normalised `+91` E.164 form. Transcript text may include the patient's name and reason for visit — expected for clinic review, but treat `call_logs` as sensitive personal data in production.
+**Privacy (DPDP):** `call_logs.phone` is stored in normalised E.164 form. Transcript text may include the caller's name and reason for visit — treat `call_logs` as sensitive personal data in production.
 
 **How to test**
 
 1. Make a call (phone or Playground), ask a question, book if you can, then hang up
 2. Open Supabase → `call_logs` — one new row
 3. Expand `transcript` — alternating agent/user turns with relative `ts` (seconds from call start)
-4. After a booking: `intent` = `booking`, `call_outcome` = `booked`, `booking_id` = `ARG-XXXX`
-5. FAQ-only call (hours question, no booking): `intent` = `faq`, `call_outcome` = `unknown`
+4. After a booking: `intent = booking`, `call_outcome = booked`, `booking_id = ARG-XXXX`
+5. FAQ-only call: `intent = faq`, `call_outcome = unknown`
 
 ---
 
-## Call handoff (SIP REFER)
+## Call handoff
 
-When a patient asks for a human, Priya can cold-transfer the live SIP call to the clinic's real phone number via LiveKit SIP REFER.
+When a caller asks for a human, the agent cold-transfers the live SIP call to the clinic's real phone via LiveKit SIP REFER.
 
 Set in `.env`:
 
@@ -456,13 +414,11 @@ Set in `.env`:
 CLINIC_PHONE_NUMBER=+918041234567
 ```
 
-If unset, Priya gives the fallback number (080-41234567) and does not attempt a transfer.
+If unset, the agent reads the fallback number aloud and does not attempt a transfer.
 
-**Twilio:** Enable SIP REFER on your Elastic SIP trunk — Console → Elastic SIP Trunking → your trunk → Call Transfer → **SIP REFER** (off by default). Without it, transfer fails gracefully and Priya reads the fallback number.
+**Twilio:** Enable SIP REFER on your Elastic SIP trunk — Console → Elastic SIP Trunking → your trunk → Call Transfer → **SIP REFER** (off by default). Without it, transfer fails gracefully and the agent reads the fallback number instead.
 
 **How to test**
-
-Quick test without the agent (config only):
 
 ```bash
 python scripts/test_handoff.py status
@@ -470,38 +426,27 @@ python scripts/test_handoff.py dry-run
 python scripts/test_handoff.py messages
 ```
 
-During an active phone call (get real IDs — do not use `XXXX` placeholders):
+During an active phone call (use real IDs from `rooms` output — not placeholder values):
 
 ```bash
 python scripts/test_handoff.py rooms
 python scripts/test_handoff.py refer --room clinic-<from-output> --identity <sip-from-output>
 ```
 
-Without `CLINIC_PHONE_NUMBER`:
-
-- Say "I want to speak to a doctor" — fallback number only, call stays with Priya
-
-With `CLINIC_PHONE_NUMBER` (use your mobile for testing):
-
-- Say "transfer me to a human" — Priya announces the transfer, your phone rings in a few seconds
-- `call_logs.call_outcome` should be `transferred`
-
 ---
 
-## Google Calendar setup
+## Google Calendar
 
 Supabase `slots` is the source of truth for availability. Google Calendar is a **write-only mirror** for clinic staff — the agent never reads from Calendar.
 
-1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a project called "Arogya Clinic"
-2. Enable the Google Calendar API for the project
-3. Go to IAM → Service Accounts → Create service account  
-   Name: `arogya-agent`, Role: none needed at project level
-4. Create a JSON key for the service account and save as `service-account.json` in the project root (gitignored)
-5. Open [Google Calendar](https://calendar.google.com)
-6. Create two new calendars: **Dr. Meera Nair — Arogya** and **Dr. Arun Sharma — Arogya**
-7. For each calendar: Settings → Share with specific people → add the service account email (e.g. `arogya-agent@your-project.iam.gserviceaccount.com`) → **Make changes to events**
-8. Copy each calendar's ID from Settings → Integrate calendar → Calendar ID (e.g. `xxxxxxx@group.calendar.google.com`)
-9. Set in `.env`:
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a project
+2. Enable the Google Calendar API
+3. IAM → Service Accounts → Create service account (no project-level role needed)
+4. Create a JSON key for the service account, save as `service-account.json` in the project root (gitignored)
+5. In [Google Calendar](https://calendar.google.com), create two calendars: **Dr. Meera Nair — Arogya** and **Dr. Arun Sharma — Arogya**
+6. For each calendar: Settings → Share with specific people → add the service account email → **Make changes to events**
+7. Copy each calendar's ID from Settings → Integrate calendar → Calendar ID
+8. Set in `.env`:
 
 ```env
 GOOGLE_CALENDAR_CREDENTIALS_JSON=./service-account.json
@@ -513,29 +458,22 @@ GOOGLE_CALENDAR_ID_ARUN=xxxxxxx@group.calendar.google.com
 
 Without Calendar configured (default):
 
-- Book an appointment normally
-- Logs should show `Calendar mirror disabled — skipping`
-- Booking, WhatsApp, and Supabase still complete
-
-Quick test without a call:
-
 ```bash
 python scripts/test_calendar.py status
 python scripts/test_calendar.py create --dry-run
-python scripts/test_calendar.py create --doctor "Dr. Meera Nair"
 ```
+
+Logs show `Calendar mirror disabled — skipping`. Booking, WhatsApp, and Supabase still complete.
 
 With Calendar configured:
 
-1. Complete setup above and restart the agent
-2. Book a test appointment
-3. Within a few seconds, check the doctor's Google Calendar — event shows patient name, reason, and booking ref
-4. Logs should show `Calendar event created: <event_id>`
+```bash
+python scripts/test_calendar.py create --doctor "Dr. Meera Nair"
+```
 
-Failure resilience:
+Or complete a test booking — the event should appear in the doctor's calendar within a few seconds.
 
-- Set `GOOGLE_CALENDAR_CREDENTIALS_JSON` to a nonexistent path
-- Book an appointment — calendar logs an error; Supabase booking and WhatsApp still succeed
+Failure resilience: point `GOOGLE_CALENDAR_CREDENTIALS_JSON` to a nonexistent path and book — Calendar logs an error but booking and WhatsApp still succeed.
 
 ---
 
@@ -543,18 +481,11 @@ Failure resilience:
 
 The agent answers FAQ questions by searching `knowledge/clinic_faq.md`.
 
-To update clinic information:
-
-- Edit `knowledge/clinic_faq.md`
+- Edit `knowledge/clinic_faq.md` to update clinic information
 - Restart the agent — the index rebuilds automatically on startup
-
-To add a new topic: add a new `##` section to `clinic_faq.md`.
-Each H2 section is one searchable entry.
-
-Index location: `.lancedb/` (gitignored, auto-generated on startup)
-Embedding model: `all-MiniLM-L6-v2` (~80MB, downloaded on first prewarm)
-Run `python agent.py download-files` before first start to pre-download
-both the Silero VAD model and the embedding model.
+- Add new topics by adding `##` sections; each H2 heading is one searchable chunk
+- Index: `.lancedb/` (gitignored, auto-generated)
+- Embedding model: `all-MiniLM-L6-v2` (~80 MB, downloaded on first `download-files`)
 
 ---
 
@@ -564,25 +495,99 @@ both the Silero VAD model and the embedding model.
 reception-agent/
 ├── agent.py                  # Pipeline setup and LiveKit entrypoint
 ├── knowledge/
-│   └── clinic_faq.md         # Clinic knowledge (RAG source, chunked by H2)
+│   └── clinic_faq.md         # Knowledge base (RAG source, chunked by H2)
 ├── prompts/
-│   └── system_prompt.py      # Clinic persona, booking rules, RAG instructions
+│   └── system_prompt.py      # Agent persona, booking rules, RAG instructions
 ├── tools/
-│   ├── appointment.py        # Booking tools (book, check, list doctors)
+│   ├── appointment.py        # Booking tools (book, check, list providers)
 │   ├── booking.py            # Supabase slot find + reserve
 │   ├── calendar_mirror.py    # Google Calendar write-only mirror
 │   ├── cancellation.py       # cancel_appointment, reschedule_appointment
-│   ├── handoff.py            # SIP REFER transfer to clinic phone
+│   ├── handoff.py            # SIP REFER transfer
 │   ├── faq.py                # LanceDB FAQ index + search_faq tool
 │   ├── memory.py             # Supabase caller memory (lookup, upsert, log)
 │   ├── notifications.py      # WhatsApp confirmation after booking
 │   └── transcript.py         # Call transcript collection + call_logs write
+├── sql/
+│   └── create_tables.sql     # Full Supabase schema (run this once to set up)
+├── supabase/
+│   └── functions/
+│       └── seed-slots/
+│           └── index.ts      # Edge Function for weekly slot seeding
 ├── config.py                 # Env var loading and validation
-├── scripts/
-│   └── setup_twilio_sip.py   # One-time Twilio + LiveKit SIP setup
+├── scripts/                  # One-time setup and test utilities
 ├── requirements.txt
 ├── .env.example
 └── README.md
 ```
 
 ---
+
+## Adapting for your use case
+
+The core engine — voice pipeline, slot management, caller memory, WhatsApp, transcripts — is business-agnostic. The clinic persona and rules are a thin layer on top. Here is what to change and three worked examples.
+
+### What to change
+
+| What to change | Where |
+|---|---|
+| Agent name and persona | `prompts/system_prompt.py` — identity block at the top |
+| Opening line | Same file — hardcoded in the identity block |
+| Provider / staff names | `sql/create_tables.sql` `slots_doctor_check` constraint + `prompts/system_prompt.py` booking instructions |
+| Business hours and slot schedule | Seed block in `sql/create_tables.sql` + `supabase/functions/seed-slots/index.ts` |
+| FAQ content | `knowledge/clinic_faq.md` — replace with your own, one `##` section per topic |
+| Calendar names | `.env` / `.env.example` — `GOOGLE_CALENDAR_ID_*` variable names and values |
+| Handoff number | `.env` → `CLINIC_PHONE_NUMBER` |
+| Voice | `agent.py` → Murf voice ID (replace `en-IN-anisha` with your preferred voice) |
+
+### Example: hair salon
+
+**`prompts/system_prompt.py`** — update the identity block:
+
+```
+You are Zara, the AI receptionist for Curl & Cut salon, Indiranagar, Bangalore.
+Your opening line: Hello, thanks for calling Curl & Cut. I'm Zara, your AI assistant. How can I help?
+```
+
+Update the booking flow to collect: service type (haircut / colour / blowout), stylist preference, date and time.
+
+**`sql/create_tables.sql`** — change the `slots_doctor_check` constraint to your stylists:
+
+```sql
+constraint slots_stylist_check check (doctor in ('Aisha', 'Priya', 'Riya'))
+```
+
+**`knowledge/clinic_faq.md`** → replace with `knowledge/salon_faq.md` covering services, pricing, cancellation policy, parking.
+
+**`.env`** — swap `GOOGLE_CALENDAR_ID_MEERA` / `GOOGLE_CALENDAR_ID_ARUN` for your stylists' calendar IDs.
+
+### Example: legal intake
+
+**`prompts/system_prompt.py`** — simplified intake persona (no slot booking needed):
+
+```
+You are Alex, the AI intake assistant for Mehta & Associates.
+Collect: caller name, contact number, matter type (civil / criminal / family / property),
+and a brief description. Then offer to schedule a callback with a solicitor.
+```
+
+For consultation slots, keep the booking engine as-is. For callback-only intake, replace `book_appointment` with a lighter tool that logs the inquiry and records a preferred callback time.
+
+**`knowledge/clinic_faq.md`** → replace with `knowledge/firm_faq.md` — practice areas, fee structure, required documents, office location.
+
+### Example: restaurant reservations
+
+**`prompts/system_prompt.py`** — update persona and booking flow:
+
+```
+You are Anaya, reservations AI for The Spice Room.
+Collect: guest name, phone, date, time, party size, and any dietary requirements.
+```
+
+**`sql/create_tables.sql`** — the `slots` table maps naturally to table-time pairs. Rename `doctor` to `table` conceptually and update the check constraint:
+
+```sql
+constraint slots_table_check check (doctor in ('Table 1', 'Table 2', 'Table 3', 'Terrace'))
+```
+
+**`supabase/functions/seed-slots/index.ts`** — update the seeding loop with your opening hours, days of the week, and booking interval (e.g. every 30 minutes from 12:00 to 22:00).
