@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from tools.memory import get_client
@@ -15,6 +15,55 @@ from tools.memory import get_client
 logger = logging.getLogger(__name__)
 
 VALID_DOCTORS = ("Dr. Meera Nair", "Dr. Arun Sharma")
+
+
+async def check_slot_coverage() -> None:
+    """
+    Called once at agent startup in prewarm.
+    Queries how many days of future slots exist.
+    Logs a warning if fewer than 14 days remain — gives the team
+    time to intervene before slots run out.
+    Never raises — slot coverage check must not block agent startup.
+    """
+
+    def _check() -> int:
+        try:
+            client = get_client()
+            result = (
+                client.table("slots")
+                .select("iso_date")
+                .gte("iso_date", date.today().isoformat())
+                .eq("status", "available")
+                .order("iso_date", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if not result.data:
+                return 0
+            latest = date.fromisoformat(str(result.data[0]["iso_date"])[:10])
+            return (latest - date.today()).days
+        except Exception as exc:
+            logger.error("Slot coverage check failed: %s", exc)
+            return -1
+
+    days = await asyncio.to_thread(_check)
+    if days == -1:
+        logger.error("Could not determine slot coverage — Supabase unreachable?")
+    elif days == 0:
+        logger.critical(
+            "SLOT COVERAGE: NO future slots available — book_appointment will fail"
+        )
+    elif days < 7:
+        logger.critical(
+            "SLOT COVERAGE: Only %s days of slots remain — seed immediately", days
+        )
+    elif days < 14:
+        logger.warning(
+            "SLOT COVERAGE: %s days of slots remain — Edge Function may have missed a run",
+            days,
+        )
+    else:
+        logger.info("SLOT COVERAGE: %s days ahead — OK", days)
 
 
 def _find_available_slot_sync(

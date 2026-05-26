@@ -185,6 +185,219 @@ Edge cases:
 
 ---
 
+## Cancellation and rescheduling (schema)
+
+Run in the Supabase SQL editor (in addition to patients/appointments/slots):
+
+```sql
+ALTER TABLE slots ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'confirmed';
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS rescheduled_from TEXT;
+```
+
+`rescheduled_from` on a new appointment row stores the previous `booking_id` after a reschedule.
+
+Slots use `status` (`available` / `booked`), `iso_date`, `iso_time`, `booking_id`, `phone`, `patient_name`, and `reason` — aligned with `tools/booking.py`.
+
+**How to test**
+
+Cancellation: book via phone, call again, say you want to cancel, confirm phone, say yes — check `slots.status=available`, `appointments.status=cancelled`, WhatsApp cancellation.
+
+Reschedule: book, call to reschedule, give new date/time, confirm — old slot freed, new slot booked, WhatsApp reschedule message.
+
+---
+
+## Slot seeding automation
+
+Slots are auto-seeded by a Supabase Edge Function that runs every Sunday at midnight IST. It ensures at least 30 days of future slots are always available for both doctors.
+
+The `slots` table uses `iso_date`, `iso_time`, and `status` (`available` / `booked`), with a unique constraint on `(doctor, iso_date, iso_time)` — see `sql/create_tables.sql`.
+
+### Deploy the Edge Function
+
+1. Install Supabase CLI:
+
+   ```bash
+   npm install -g supabase
+   ```
+
+2. Link to your project:
+
+   ```bash
+   supabase login
+   supabase link --project-ref your-project-ref
+   ```
+
+3. Create the function (skip if `supabase/functions/seed-slots/` already exists in this repo):
+
+   ```bash
+   supabase functions new seed-slots
+   ```
+
+4. Use the function source from this repo: `supabase/functions/seed-slots/index.ts` (or replace the generated file with it). It queries the latest `iso_date`, and if fewer than 30 days of coverage remain, inserts `available` slots through today + 60 days (Mon–Sat, morning and evening blocks, both doctors). Upserts are idempotent via `onConflict: doctor,iso_date,iso_time` and `ignoreDuplicates: true`.
+
+5. Deploy the function:
+
+   ```bash
+   supabase functions deploy seed-slots --no-verify-jwt
+   ```
+
+6. Set up the weekly cron schedule in Supabase Dashboard:
+
+   → Database → Extensions → enable `pg_cron` if not already enabled  
+   → Database → SQL Editor → run:
+
+   ```sql
+   select cron.schedule(
+     'seed-slots-weekly',
+     '30 18 * * 0',   -- Sunday 18:30 UTC = midnight IST (Sunday night)
+     $$
+     select net.http_post(
+       url := 'https://your-project-ref.supabase.co/functions/v1/seed-slots',
+       headers := jsonb_build_object(
+         'Content-Type', 'application/json',
+         'Authorization', 'Bearer ' || current_setting('app.service_role_key')
+       ),
+       body := '{}'::jsonb
+     )
+     $$
+   );
+   ```
+
+   Replace `your-project-ref` with your actual project ref(Your Project ID from Settings -> General -> Project ID).  
+   Replace the Authorization Bearer value with your service role key if `current_setting('app.service_role_key')` is not configured.
+
+7. Test the function manually before relying on the cron.
+
+   The Supabase CLI no longer has `functions invoke` (CLI v2+). Call the deployed URL with `curl` instead (use your **service role** key from Dashboard → Settings → API):
+
+   **bash / macOS / Linux:**
+
+   ```bash
+   curl -sS -L -X POST "https://YOUR_PROJECT_REF.supabase.co/functions/v1/seed-slots" \
+     -H "Authorization: Bearer YOUR_SERVICE_ROLE_KEY" \
+     -H "Content-Type: application/json" \
+     -d "{}"
+   ```
+
+   **PowerShell (Windows):**
+
+   ```powershell
+   curl.exe -sS -L -X POST "https://YOUR_PROJECT_REF.supabase.co/functions/v1/seed-slots" `
+     -H "Authorization: Bearer YOUR_SERVICE_ROLE_KEY" `
+     -H "Content-Type: application/json" `
+     -d "{}"
+   ```
+
+   Replace `YOUR_PROJECT_REF` and `YOUR_SERVICE_ROLE_KEY`. You must deploy with `--no-verify-jwt` (step 5) so this works without a user JWT.
+
+   **Local test** (requires Docker + `supabase start`):
+
+   ```bash
+   supabase functions serve seed-slots --no-verify-jwt
+   ```
+
+   In another terminal:
+
+   ```bash
+   curl -sS -L -X POST "http://127.0.0.1:54321/functions/v1/seed-slots" \
+     -H "Authorization: Bearer YOUR_SERVICE_ROLE_KEY" \
+     -H "Content-Type: application/json" \
+     -d "{}"
+   ```
+
+   Expected response:
+
+   ```json
+   {"message": "Seeded N slots from YYYY-MM-DD to YYYY-MM-DD"}
+   ```
+
+   or if slots are already sufficient:
+
+   ```json
+   {"message": "Slots OK — N days ahead. No seeding needed."}
+   ```
+
+### Manual seeding (fallback)
+
+If you need to seed immediately without the Edge Function:
+
+```sql
+INSERT INTO slots (doctor, iso_date, iso_time, status)
+SELECT
+    doctor,
+    date_val::DATE,
+    slot_start::TIME,
+    'available'
+FROM
+    UNNEST(ARRAY['Dr. Meera Nair', 'Dr. Arun Sharma']) AS doctor,
+    generate_series(
+        CURRENT_DATE,
+        CURRENT_DATE + INTERVAL '60 days',
+        INTERVAL '1 day'
+    ) AS date_val,
+    UNNEST(ARRAY[
+        '09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30',
+        '17:00','17:30','18:00','18:30','19:00','19:30'
+    ]) AS slot_start
+WHERE EXTRACT(ISODOW FROM date_val::DATE) BETWEEN 1 AND 6
+ON CONFLICT (doctor, iso_date, iso_time) DO NOTHING;
+```
+
+### Monitoring
+
+Check current slot coverage at any time:
+
+```sql
+SELECT
+    MIN(iso_date) AS earliest_slot,
+    MAX(iso_date) AS latest_slot,
+    COUNT(*) FILTER (WHERE status = 'available') AS available_slots,
+    COUNT(*) FILTER (WHERE status = 'booked') AS booked_slots,
+    MAX(iso_date)::date - CURRENT_DATE AS days_of_coverage
+FROM slots
+WHERE iso_date >= CURRENT_DATE;
+```
+
+### How to test
+
+**Coverage check at startup**
+
+1. Run: `python agent.py dev`
+2. Logs should show `SLOT COVERAGE: N days ahead — OK`
+3. To test the warning, temporarily delete far-future slots:
+
+   ```sql
+   DELETE FROM slots WHERE iso_date > CURRENT_DATE + INTERVAL '10 days';
+   ```
+
+   Restart the agent — should log a critical warning. Re-run the manual seed SQL to restore.
+
+**Edge Function**
+
+1. Deploy: `supabase functions deploy seed-slots --no-verify-jwt`
+2. POST to the function URL with `curl` (see step 7 above — not `supabase functions invoke`)
+3. Check response JSON and run the monitoring query above
+
+**Idempotency**
+
+1. Run the `curl` POST twice back to back
+2. Second run should report “Slots OK” or seed 0 new rows
+3. No duplicate rows (unique constraint + `ignoreDuplicates`)
+
+**Cron verification**
+
+```sql
+SELECT * FROM cron.job WHERE jobname = 'seed-slots-weekly';
+
+SELECT * FROM cron.job_run_details
+WHERE jobid = (SELECT jobid FROM cron.job WHERE jobname = 'seed-slots-weekly')
+ORDER BY start_time DESC
+LIMIT 5;
+```
+
+---
+
 ## Transcript logging setup
 
 Every call is stored in Supabase `call_logs` when the room disconnects. The agent collects user and assistant speech during the call and writes one row per call.
@@ -358,6 +571,7 @@ reception-agent/
 │   ├── appointment.py        # Booking tools (book, check, list doctors)
 │   ├── booking.py            # Supabase slot find + reserve
 │   ├── calendar_mirror.py    # Google Calendar write-only mirror
+│   ├── cancellation.py       # cancel_appointment, reschedule_appointment
 │   ├── handoff.py            # SIP REFER transfer to clinic phone
 │   ├── faq.py                # LanceDB FAQ index + search_faq tool
 │   ├── memory.py             # Supabase caller memory (lookup, upsert, log)

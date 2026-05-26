@@ -31,6 +31,7 @@ import config  # validates required env vars at import time
 from prompts.system_prompt import build_system_prompt
 from tools.appointment import book_appointment, check_availability, get_doctor_list
 from tools.faq import build_index, search_faq
+from tools.cancellation import cancel_appointment, reschedule_appointment
 from tools.handoff import transfer_to_human
 from tools.memory import _normalize_phone, get_patient, increment_call_count
 from tools.transcript import (
@@ -180,6 +181,8 @@ class ClinicAgent(Agent):
                 check_availability,
                 get_doctor_list,
                 search_faq,
+                cancel_appointment,
+                reschedule_appointment,
                 transfer_to_human,
             ],
         )
@@ -211,6 +214,13 @@ def prewarm(proc: JobProcess) -> None:
     except Exception:
         logger.exception("Greeting pre-synthesis failed — will synthesize on first call")
         proc.userdata["tts"] = tts_for_calls
+
+    from tools.booking import check_slot_coverage
+
+    try:
+        asyncio.run(check_slot_coverage())
+    except Exception:
+        logger.exception("Slot coverage check failed at prewarm")
 
 
 def _is_phone_room(room_name: str) -> bool:
