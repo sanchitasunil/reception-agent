@@ -191,7 +191,6 @@ Set `LLM_PROVIDER` in `.env`:
 
 | Value | Model | API key needed | Notes |
 |---|---|---|---|
-| `opencode` | `kimi-k2.5` via OpenCode Go | `OPENCODE_API_KEY` | |
 | `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` | |
 | `gemini` | `gemini-2.0-flash` | `GOOGLE_API_KEY` | |
 | `realtime` | `gpt-4o-realtime-preview` | `OPENAI_API_KEY` | Handles STT+LLM internally; no separate `STT_PROVIDER` needed. Murf handles TTS. |
