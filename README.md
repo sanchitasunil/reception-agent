@@ -1,12 +1,11 @@
-# Reception Agent — AI Phone Receptionist
+# Reception Agent - an AI Phone Receptionist
 
-An AI voice receptionist that picks up your phone line, books appointments, answers questions, and sends WhatsApp confirmations. Built for a medical clinic. Swap the prompt and knowledge base to make it anything.
+A fully autonomous voice agent designed to handle inbound clinic calls, schedule appointments, and manage patient FAQs without human intervention. It’s configured for a medical clinic, but swap the system prompt and local knowledge base, and it can be adapted for any business front desk.
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![LiveKit](https://img.shields.io/badge/Transport-LiveKit%20Agents-002cf2)](https://docs.livekit.io/agents)
 [![Deepgram](https://img.shields.io/badge/STT-Deepgram%20Nova--3-13EF93?logoColor=black)](https://deepgram.com)
-[![Gemini](https://img.shields.io/badge/LLM-Gemini%202.0%20Flash-4285F4?logo=google&logoColor=white)](https://aistudio.google.com)
-[![Murf](https://img.shields.io/badge/TTS-Murf%20Falcon-6366F1)](https://murf.ai/voices)
+[![Murf](https://img.shields.io/badge/TTS-Murf%20Falcon-6366F1)]([https://murf.ai/voices](https://murf.ai/api)
 [![Twilio](https://img.shields.io/badge/Phone-Twilio%20SIP-F22F46?logo=twilio&logoColor=white)](https://twilio.com)
 [![Supabase](https://img.shields.io/badge/Database-Supabase-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com)
 
@@ -14,7 +13,7 @@ An AI voice receptionist that picks up your phone line, books appointments, answ
 
 ## What it does
 
-- **Answers inbound calls** via Twilio, speaks with Murf Falcon TTS (`en-IN-anisha`, ~130ms to first audio)
+- **Answers inbound calls** via Twilio, speaks with Murf Falcon TTS 
 - **Books, cancels, and reschedules** appointments against a live Supabase slot table
 - **Greets returning callers by name** — looks up caller memory on every call, no need to re-introduce yourself
 - **Answers FAQs** using semantic search over a local knowledge base (LanceDB + all-MiniLM-L6-v2)
@@ -125,6 +124,7 @@ Open `.env` and fill in every value. The table below shows where to find each on
 | `LIVEKIT_API_SECRET` | Same page as API key |
 | `LIVEKIT_SIP_URI` | LiveKit Cloud > Telephony > SIP URI (hostname only, no `sip:` prefix) |
 | `DEEPGRAM_API_KEY` | [console.deepgram.com](https://console.deepgram.com) |
+| `LLM_PROVIDER` | | gemini or opencode or any other |
 | `GOOGLE_API_KEY` | [aistudio.google.com](https://aistudio.google.com) > API keys |
 | `MURF_API_KEY` | murf.ai > Settings > API |
 | `TWILIO_ACCOUNT_SID` | [console.twilio.com](https://console.twilio.com) > Account Info |
@@ -154,12 +154,12 @@ Downloads Silero VAD and the FAQ embedding model (`all-MiniLM-L6-v2`, ~80 MB on 
 ### Run the agent
 
 ```bash
-# Browser testing — no phone needed
+# Browser testing - no phone needed
 python agent.py dev
 ```
 
 ```bash
-# Phone testing — stable, no file-watcher restarts
+# Phone testing - stable, no file-watcher restarts
 python agent.py start
 ```
 
@@ -205,8 +205,6 @@ The SIP trunk is the bridge that receives calls from Twilio.
 4. Add your Twilio number to **Numbers** in E.164 format (e.g. `+12015551234`)
 5. Set **Allowed addresses** to `0.0.0.0/0`
 6. Save and copy the **SIP URI** shown at the top (e.g. `abc123.sip.livekit.cloud`)
-
-Add it to `.env` as `LIVEKIT_SIP_URI` — hostname only, no `sip:` prefix.
 
 ### Step 3 — Twilio TwiML Bin
 
@@ -263,7 +261,7 @@ The dispatch rule tells LiveKit which agent worker handles each call.
 ### Step 5 — Run the agent and call it
 
 ```bash
-# For phone testing — stable, no file-watcher restarts
+# For phone testing - stable, no file-watcher restarts
 python agent.py start
 
 # For development with verbose logs
@@ -292,7 +290,7 @@ python scripts/setup_twilio_sip.py
 
 ### WhatsApp Confirmations
 
-After every booking the agent sends a WhatsApp message to the patient. No extra setup beyond the `.env` values above.
+After every booking the agent sends a WhatsApp message to the patient. 
 
 **Sandbox setup (free, for testing):**
 
@@ -300,7 +298,7 @@ After every booking the agent sends a WhatsApp message to the patient. No extra 
 2. From the patient's phone, send `join <keyword>` to `+1 415 523 8886`
 3. Confirm `.env` has `TWILIO_WHATSAPP_FROM=whatsapp:+14155238886`
 
-Each recipient must opt in once. For production, apply for a WhatsApp Business number through Twilio and update `TWILIO_WHATSAPP_FROM`.
+Each recipient must opt in once. It resets every 24 hours, so every recepient must resend the join message once every 24 hours when using the sandbox. For production, apply for a WhatsApp Business number through Twilio and update `TWILIO_WHATSAPP_FROM`.
 
 **Test without making a call:**
 
@@ -333,7 +331,7 @@ python scripts/test_handoff.py dry-run
 python scripts/test_handoff.py messages
 ```
 
-During a live call — get real room and identity values from `rooms` first:
+During a live call - get real room and identity values from `rooms` first:
 
 ```bash
 python scripts/test_handoff.py rooms
@@ -373,7 +371,7 @@ The script creates all four tables, adds indexes, and seeds 14 days of available
 | Table | What it stores |
 |---|---|
 | `patients` | Caller name, preferred doctor, visit history, call count |
-| `slots` | Every 30-minute time slot — available or booked, with doctor, date, and time |
+| `slots` | Every 30-minute time slot - available or booked, with doctor, date, and time |
 | `appointments` | Booking audit log with confirmed / cancelled / rescheduled status |
 | `call_logs` | Full call transcript, intent label, and outcome label for every call |
 
@@ -383,7 +381,7 @@ On every inbound call the agent looks up the caller's phone number from the SIP 
 
 After a successful booking, `patients` and `appointments` are upserted automatically.
 
-**Test without making a call:**
+**Test before making a call:**
 
 ```bash
 python scripts/test_memory.py lookup --phone 9876543210   # same lookup the agent runs on every call
@@ -629,7 +627,7 @@ A general consultation is 500 rupees. A follow-up within two weeks is 350 rupees
 | Embedding model | `all-MiniLM-L6-v2` (~80 MB, downloaded once) |
 | Retrieval | Top-3 nearest chunks by cosine similarity |
 
-More on the models: [all-MiniLM-L6-v2 on HuggingFace](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) — [LanceDB docs](https://lancedb.github.io/lancedb/)
+More on the models: [all-MiniLM-L6-v2 on HuggingFace](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) — [LanceDB docs]((https://docs.lancedb.com/))
 
 ---
 
@@ -692,7 +690,7 @@ The clinic persona is a thin configuration layer on top of a general-purpose cal
 | FAQ content | `knowledge/clinic_faq.md` | Replace entirely, keep the `##` heading structure |
 | Calendar names | `.env` | `GOOGLE_CALENDAR_ID_*` values |
 | Handoff number | `.env` | `CLINIC_PHONE_NUMBER` |
-| Voice | `agent.py` | Murf voice ID — see [murf.ai/voices](https://murf.ai/voices) |
+| Voice | `agent.py` | Murf voice ID — see [murf.ai/voices](https://murf.ai/api/dashboard) |
 
 ### Example prompts
 
@@ -765,8 +763,7 @@ Update `supabase/functions/seed-slots/index.ts` for your opening hours, days, an
 - [LiveKit Agents Playground](https://agents-playground.livekit.io/) — browser-based testing, no phone needed
 - [LiveKit docs: Accepting inbound Twilio calls](https://docs.livekit.io/telephony/accepting-calls/inbound-twilio/)
 - [Deepgram console](https://console.deepgram.com)
-- [Google AI Studio](https://aistudio.google.com) — Gemini API keys
-- [Murf AI](https://murf.ai) — [voice library](https://murf.ai/voices)
+- [Murf AI]((https://murf.ai/api/dashboard)) 
 - [Twilio console](https://console.twilio.com)
 - [Twilio WhatsApp sandbox](https://www.twilio.com/console/sms/whatsapp/sandbox)
 - [Supabase](https://supabase.com)
@@ -774,6 +771,6 @@ Update `supabase/functions/seed-slots/index.ts` for your opening hours, days, an
 
 **Libraries and models**
 
-- [LanceDB](https://lancedb.github.io/lancedb/) — vector store for FAQ search
+- [LanceDB]((https://docs.lancedb.com/)) — vector store for FAQ search
 - [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) — FAQ embedding model
 - [Silero VAD](https://github.com/snakers4/silero-vad) — voice activity detection
