@@ -9,23 +9,21 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
-
-import pytz
+from datetime import datetime, timedelta, timezone
 
 from config import (
     GOOGLE_CALENDAR_CREDENTIALS_JSON,
-    GOOGLE_CALENDAR_ID_ARUN,
-    GOOGLE_CALENDAR_ID_MEERA,
+    GOOGLE_CALENDAR_ID_JAMES,
+    GOOGLE_CALENDAR_ID_SARAH,
     calendar_enabled,
 )
 
 logger = logging.getLogger(__name__)
-IST = pytz.timezone("Asia/Kolkata")
+UTC = timezone.utc
 
 DOCTOR_CALENDAR_MAP = {
-    "Dr. Meera Nair": GOOGLE_CALENDAR_ID_MEERA,
-    "Dr. Arun Sharma": GOOGLE_CALENDAR_ID_ARUN,
+    "Dr. Sarah Lin": GOOGLE_CALENDAR_ID_SARAH,
+    "Dr. James Cole": GOOGLE_CALENDAR_ID_JAMES,
 }
 
 
@@ -83,26 +81,25 @@ async def create_calendar_event(
         try:
             service = _get_service()
 
-            start_naive = datetime.strptime(f"{iso_date} {iso_time}", "%Y-%m-%d %H:%M")
-            start = IST.localize(start_naive)
+            start = datetime.strptime(f"{iso_date} {iso_time}", "%Y-%m-%d %H:%M").replace(tzinfo=UTC)
             end = start + timedelta(minutes=30)
 
             event = {
-                "summary": f"[Arogya] {patient_name} — {reason}",
+                "summary": f"[The Clinic] {patient_name} — {reason}",
                 "description": (
                     f"Patient: {patient_name}\n"
                     f"Phone: {phone}\n"
                     f"Reason: {reason}\n"
                     f"Booking ref: {booking_id}\n"
-                    f"Booked via: Priya AI Receptionist"
+                    f"Booked via: Aria AI Receptionist"
                 ),
                 "start": {
                     "dateTime": start.isoformat(),
-                    "timeZone": "Asia/Kolkata",
+                    "timeZone": "UTC",
                 },
                 "end": {
                     "dateTime": end.isoformat(),
-                    "timeZone": "Asia/Kolkata",
+                    "timeZone": "UTC",
                 },
                 "colorId": "2",
                 "reminders": {

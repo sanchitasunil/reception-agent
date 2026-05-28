@@ -257,39 +257,6 @@ async def check_openai_llm() -> bool:
         return False
 
 
-async def check_openai_realtime() -> bool:
-    print("=== OpenAI Realtime (gpt-4o-realtime-preview) ===")
-    try:
-        import aiohttp
-        # Validate the key has realtime access via the models endpoint
-        t0 = time.monotonic()
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                "https://api.openai.com/v1/models/gpt-4o-realtime-preview",
-                headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}"},
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as resp:
-                elapsed = time.monotonic() - t0
-                body = await resp.text()
-                if resp.status == 200:
-                    print(f"  OK  gpt-4o-realtime-preview accessible ({elapsed * 1000:.0f}ms)")
-                    return True
-                elif resp.status in (401, 403):
-                    print(f"  FAIL  HTTP {resp.status}: {body[:200]}")
-                    print("  Fix: check OPENAI_API_KEY in .env")
-                    return False
-                elif resp.status == 404:
-                    print(f"  FAIL  gpt-4o-realtime-preview not available on this account")
-                    print("  Fix: ensure your OpenAI account has Realtime API access")
-                    return False
-                else:
-                    print(f"  FAIL  HTTP {resp.status}: {body[:200]}")
-                    return False
-    except Exception as exc:
-        print(f"  FAIL  {exc}")
-        return False
-
-
 async def check_llm() -> bool:
     if config.LLM_PROVIDER == "gemini":
         return await check_gemini()
@@ -297,8 +264,6 @@ async def check_llm() -> bool:
         return await check_ollama()
     elif config.LLM_PROVIDER == "openai":
         return await check_openai_llm()
-    elif config.LLM_PROVIDER == "realtime":
-        return await check_openai_realtime()
     else:
         return await check_opencode()
 

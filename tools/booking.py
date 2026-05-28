@@ -14,7 +14,7 @@ from tools.memory import get_client
 
 logger = logging.getLogger(__name__)
 
-VALID_DOCTORS = ("Dr. Meera Nair", "Dr. Arun Sharma")
+VALID_DOCTORS = ("Dr. Sarah Lin", "Dr. James Cole")
 
 
 async def check_slot_coverage() -> None:

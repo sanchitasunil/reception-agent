@@ -17,6 +17,7 @@ import asyncio
 import json
 import logging
 import sys
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -60,10 +61,13 @@ def _parse_args() -> argparse.Namespace:
     )
     book.add_argument("--phone", required=True)
     book.add_argument("--name", default="Rahul Sharma")
-    book.add_argument("--doctor", default="Dr. Meera Nair")
+    book.add_argument("--doctor", default="Dr. Sarah Lin")
     book.add_argument("--date", default="Thursday 29 May")
     book.add_argument("--time", default="nine in the morning")
-    book.add_argument("--booking-id", default="ARG-TEST-4242")
+    book.add_argument(
+        "--booking-id", 
+        default=f"ARG-TEST-{uuid.uuid4().hex[:6].upper()}"
+    )
     book.add_argument("--reason", default="follow-up on blood pressure")
 
     prompt = sub.add_parser(
@@ -78,11 +82,17 @@ def _parse_args() -> argparse.Namespace:
     )
     flow.add_argument("--phone", required=True)
     flow.add_argument("--name", default="Test Patient")
-    flow.add_argument("--doctor", default="Dr. Meera Nair")
+    flow.add_argument("--doctor", default="Dr. Sarah Lin")
     flow.add_argument("--date", default="Friday 30 May")
     flow.add_argument("--time", default="ten in the morning")
-    flow.add_argument("--booking-id", default="ARG-TEST-FLOW")
+    flow.add_argument(
+        "--booking-id",
+        default=f"ARG-TEST-{uuid.uuid4().hex[:6].upper()}"
+    )
     flow.add_argument("--reason", default="routine check-up")
+
+    delete = sub.add_parser("delete", help="remove patient + all appointments from Supabase")
+    delete.add_argument("--phone", required=True)
 
     return parser.parse_args()
 
@@ -169,9 +179,25 @@ async def _cmd_prompt(phone: str) -> int:
     print()
     print("Example spoken greeting:")
     print(
-        f'  "Hello {example_name}, welcome back to Arogya Clinic. I\'m Priya, '
+        f'  "Hello {example_name}, welcome back to The Clinic. I\'m Aria, '
         f'your AI receptionist. How can I help you today?"'
     )
+    return 0
+
+
+async def _cmd_delete(phone: str) -> int:
+    from supabase import create_client
+    normalized = _normalize_phone(phone)
+    print(f"=== delete ===")
+    print(f"Normalized phone: {normalized}")
+    client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+    client.table("appointments").delete().eq("phone", normalized).execute()
+    client.table("patients").delete().eq("phone", normalized).execute()
+    row = await get_patient(phone)
+    if row is None:
+        print("Deleted. Patient no longer found.")
+    else:
+        print("WARNING: patient row still present after delete.")
     return 0
 
 
@@ -207,6 +233,8 @@ async def main() -> None:
         await _cmd_prompt(args.phone)
     elif args.action == "flow":
         await _cmd_flow(args)
+    elif args.action == "delete":
+        await _cmd_delete(args.phone)
 
 
 if __name__ == "__main__":

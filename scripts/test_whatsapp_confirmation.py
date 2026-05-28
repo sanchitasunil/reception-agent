@@ -42,7 +42,7 @@ def _parse_args() -> argparse.Namespace:
         help="Patient mobile (10 digits, 0-prefix, or +91). Must have joined sandbox.",
     )
     parser.add_argument("--name", default="Rahul Sharma", help="Patient name")
-    parser.add_argument("--doctor", default="Dr. Meera Nair", help="Doctor name")
+    parser.add_argument("--doctor", default="Dr. Sarah Lin", help="Doctor name")
     parser.add_argument("--date", default="Thursday 29 May", help="Appointment date")
     parser.add_argument("--time", default="nine in the morning", help="Appointment time")
     parser.add_argument("--booking-id", default="ARG-4242", help="Booking reference")

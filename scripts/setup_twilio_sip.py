@@ -55,7 +55,7 @@ def step1_create_twiml_bin(
             "POST",
             "https://content.twilio.com/v1/TwiMLBins",
             data={
-                "FriendlyName": "Arogya Clinic — LiveKit SIP",
+                "FriendlyName": "The Clinic — LiveKit SIP",
                 "Body": _twiml_body(sip_uri, twilio_number),
             },
         )
@@ -229,7 +229,7 @@ async def main() -> None:
     print(f"  TwiML Bin    : {twiml_bin_url}")
     print(f"  SIP trunk    : {trunk.sip_trunk_id}")
     print(f"  Dispatch rule: {rule.sip_dispatch_rule_id}")
-    print(f"\nCall {config.TWILIO_PHONE_NUMBER} to speak to Priya.")
+    print(f"\nCall {config.TWILIO_PHONE_NUMBER} to speak to Aria.")
 
 
 if __name__ == "__main__":

@@ -147,13 +147,13 @@ async def get_doctor_list() -> list[dict[str, str]]:
     logger.info("get_doctor_list called")
     return [
         {
-            "name": "Dr. Meera Nair",
+            "name": "Dr. Sarah Lin",
             "specialty": "General Physician",
             "experience": "15 years",
             "focus": "Diabetes and hypertension",
         },
         {
-            "name": "Dr. Arun Sharma",
+            "name": "Dr. James Cole",
             "specialty": "Physician",
             "experience": "10 years",
             "focus": "Respiratory and infectious diseases",

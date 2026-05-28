@@ -40,7 +40,7 @@ def _build_confirmation_body(
     reason: str,
 ) -> str:
     return (
-        f"Hi {patient_name}, your appointment at Arogya Clinic is confirmed.\n"
+        f"Hi {patient_name}, your appointment at The Clinic is confirmed.\n"
         f"\n"
         f"Doctor: {doctor}\n"
         f"Date: {date}\n"
@@ -48,13 +48,12 @@ def _build_confirmation_body(
         f"Ref: {booking_id}\n"
         f"Reason: {reason}\n"
         f"\n"
-        f"📍 45, 5th Cross, Koramangala 4th Block, Bangalore 560034\n"
-        f"(Near the Koramangala water tank)\n"
+        f"📍 14 Birch Lane, Suite 2, Maplewood\n"
         f"\n"
-        f"To cancel or reschedule, call us at 080-41234567 at least 2 hours "
+        f"To cancel or reschedule, call us at 555-0142 at least 2 hours "
         f"before your appointment.\n"
         f"\n"
-        f"— Arogya Clinic"
+        f"— The Clinic"
     )
 
 

@@ -1,7 +1,7 @@
 # Call flow:
 # Phone call → Twilio number → TwiML Bin → LiveKit SIP URI
 # → SIP inbound trunk → dispatch rule → clinic-agent worker
-# → AgentSession (STT(Deepgram or Whisper Realtime) → LLM → TTS(Murf Falcon))  [LLM_PROVIDER=realtime/gemini/opencode]
+# → AgentSession (STT(Deepgram or gpt-realtime-whisper) → LLM → TTS(Murf Falcon))  [LLM_PROVIDER=gemini/opencode/openai]
 
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ logging.getLogger("h2").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 OPENING_LINE = (
-    "Hello, thank you for calling Arogya Clinic. I'm Priya, your AI receptionist. "
+    "Hello, thank you for calling The Clinic. I'm Aria, your AI receptionist. "
     "How may I help you today?"
 )
 
@@ -65,7 +65,7 @@ def _opening_line_for_patient(patient_memory: dict | None) -> str:
     if patient_memory and patient_memory.get("name"):
         name = patient_memory["name"]
         return (
-            f"Hello {name}, welcome back to Arogya Clinic. I'm Priya, your AI receptionist. "
+            f"Hello {name}, welcome back to The Clinic. I'm Aria, your AI receptionist. "
             f"How can I help you today?"
         )
     return OPENING_LINE
@@ -193,11 +193,11 @@ def prewarm(proc: JobProcess) -> None:
     proc.userdata["vad"] = silero.VAD.load()
 
     # tts_for_calls is kept clean (no asyncio.run() event-loop state).
-    tts_for_calls = murf.TTS(voice="en-IN-anisha", locale="en-IN")
+    tts_for_calls = murf.TTS(voice="en-US-maverick", locale="en-US")
 
     async def _synthesise_greeting() -> list[rtc.AudioFrame]:
         # Throwaway instance: used only here so tts_for_calls stays uncontaminated.
-        tts_tmp = murf.TTS(voice="en-IN-anisha", locale="en-IN")
+        tts_tmp = murf.TTS(voice="en-US-maverick", locale="en-US")
         frames: list[rtc.AudioFrame] = []
         async with _http_ctx.open():
             async for audio in tts_tmp.synthesize(OPENING_LINE):
@@ -279,28 +279,17 @@ async def entrypoint(ctx: JobContext) -> None:
     )
     logger.info("Connected to %s (%.1fs)", ctx.room.name, time.monotonic() - t0)
 
-    tts_instance = ctx.proc.userdata.get("tts") or murf.TTS(voice="en-IN-anisha", locale="en-IN")
+    tts_instance = ctx.proc.userdata.get("tts") or murf.TTS(voice="en-US-maverick", locale="en-US")
 
-    if config.LLM_PROVIDER == "realtime":
-        # RealtimeModel handles STT internally — no separate stt= needed
-        session = AgentSession(
-            llm=openai.realtime.RealtimeModel(
-                modalities=["text"],
-                api_key=config.OPENAI_API_KEY,
-            ),
-            tts=tts_instance,
-            vad=ctx.proc.userdata["vad"],
-        )
-    else:
-        session = AgentSession(
-            stt=openai.STT(model="gpt-4o-transcribe", language="en", api_key=config.OPENAI_API_KEY) if config.STT_PROVIDER == "openai"
-            else deepgram.STT(model="nova-3", language="en-IN"),
-            llm=google.LLM(model="gemini-2.5-flash") if config.LLM_PROVIDER == "gemini"
-            else openai.LLM(model="gpt-4o-mini", api_key=config.OPENAI_API_KEY) if config.LLM_PROVIDER == "openai"
-            else openai.LLM(model="kimi-k2.5", base_url="https://opencode.ai/zen/go/v1", api_key=config.OPENCODE_API_KEY),
-            tts=tts_instance,
-            vad=ctx.proc.userdata["vad"],
-        )
+    session = AgentSession(
+        stt=openai.STT(model="gpt-realtime-whisper", use_realtime=True, language="en", api_key=config.OPENAI_API_KEY) if config.STT_PROVIDER == "openai"
+        else deepgram.STT(model="nova-3", language="en"),
+        llm=google.LLM(model="gemini-2.5-flash") if config.LLM_PROVIDER == "gemini"
+        else openai.LLM(model="gpt-4o-mini", api_key=config.OPENAI_API_KEY) if config.LLM_PROVIDER == "openai"
+        else openai.LLM(model="kimi-k2.5", base_url="https://opencode.ai/zen/go/v1", api_key=config.OPENCODE_API_KEY),
+        tts=tts_instance,
+        vad=ctx.proc.userdata["vad"],
+    )
 
     caller_phone = await _resolve_caller_phone(ctx, is_phone)
     patient_memory = None

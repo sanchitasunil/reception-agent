@@ -1,7 +1,7 @@
 """
 SIP call transfer — forwards the live call to the clinic's real phone number.
 Uses LiveKit SIP REFER (cold transfer).
-Called when patient requests a human or Priya cannot resolve the query.
+Called when patient requests a human or Aria cannot resolve the query.
 """
 
 from __future__ import annotations
@@ -105,10 +105,10 @@ async def transfer_to_human(
     Call this when:
     - The patient explicitly asks to speak to a doctor or human
     - The patient is distressed and needs immediate human support
-    - The query is a medical question Priya cannot answer
+    - The query is a medical question Aria cannot answer
     - The patient has complained or is frustrated after two attempts
-    - The patient has asked for something outside Priya's scope after one redirect
-    Do NOT call this for routine bookings, FAQs, or cancellations Priya can handle.
+    - The patient has asked for something outside Aria's scope after one redirect
+    Do NOT call this for routine bookings, FAQs, or cancellations Aria can handle.
     reason: brief description of why the transfer is needed.
     """
     _ = context  # required for tool injection

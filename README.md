@@ -126,8 +126,8 @@ Open `.env` and fill in every value. The table below shows where to find each on
 | `LIVEKIT_SIP_URI` | LiveKit Cloud > Telephony > SIP URI (hostname only, no `sip:` prefix) |
 | `STT_PROVIDER` | `deepgram` or `openai` — see [LLM and STT providers](#2-llm-and-stt-providers) |
 | `DEEPGRAM_API_KEY` | [console.deepgram.com](https://console.deepgram.com) — required if `STT_PROVIDER=deepgram` |
-| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) — required if `STT_PROVIDER=openai` or `LLM_PROVIDER=realtime` or `LLM_PROVIDER=openai` |
-| `LLM_PROVIDER` | `opencode`, `openai`, `gemini` or `realtime` — see [LLM and STT providers](#2-llm-and-stt-providers) |
+| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) — required if `STT_PROVIDER=openai` or `LLM_PROVIDER=openai` |
+| `LLM_PROVIDER` | `opencode`, `openai`, or `gemini` — see [LLM and STT providers](#2-llm-and-stt-providers) |
 | `OPENCODE_API_KEY` | [opencode.ai](https://opencode.ai) — required if `LLM_PROVIDER=opencode` |
 | `GOOGLE_API_KEY` | [aistudio.google.com](https://aistudio.google.com) — required if `LLM_PROVIDER=gemini` |
 | `MURF_API_KEY` | [murf.ai](https://murf.ai/api/dashboard) > Settings > API |
@@ -144,8 +144,8 @@ Open `.env` and fill in every value. The table below shows where to find each on
 |---|---|
 | `CLINIC_PHONE_NUMBER` | Live call transfer to a real staff phone |
 | `GOOGLE_CALENDAR_CREDENTIALS_JSON` | Mirror bookings to Google Calendar |
-| `GOOGLE_CALENDAR_ID_MEERA` | Calendar ID for Dr. Meera Nair |
-| `GOOGLE_CALENDAR_ID_ARUN` | Calendar ID for Dr. Arun Sharma |
+| `GOOGLE_CALENDAR_ID_SARAH` | Calendar ID for Dr. Sarah Lin |
+| `GOOGLE_CALENDAR_ID_JAMES` | Calendar ID for Dr. James Cole |
 
 ### Download models
 
@@ -191,22 +191,21 @@ Set `LLM_PROVIDER` in `.env`:
 
 | Value | Model | API key needed | Notes |
 |---|---|---|---|
+| `opencode` | `kimi-k2.5` | `OPENCODE_API_KEY` | Default |
 | `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` | |
-| `gemini` | `gemini-2.0-flash` | `GOOGLE_API_KEY` | |
-| `realtime` | `gpt-4o-realtime-preview` | `OPENAI_API_KEY` | Handles STT+LLM internally; no separate `STT_PROVIDER` needed. Murf handles TTS. |
+| `gemini` | `gemini-2.5-flash` | `GOOGLE_API_KEY` | |
 
 ```env
+LLM_PROVIDER=opencode
+OPENCODE_API_KEY=...
+
+# or
 LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-...
 
 # or
 LLM_PROVIDER=gemini
 GOOGLE_API_KEY=AIza...
-
-# or
-LLM_PROVIDER=realtime
-OPENAI_API_KEY=sk-...
-# STT_PROVIDER is ignored — realtime model handles transcription
 ```
 
 ### STT
@@ -215,8 +214,8 @@ Set `STT_PROVIDER` in `.env`:
 
 | Value | Model | API key needed | Notes |
 |---|---|---|---|
-| `deepgram` | `nova-3`, `en-IN` | `DEEPGRAM_API_KEY` | Best for Indian English accents |
-| `openai` | `gpt-4o-transcribe` | `OPENAI_API_KEY` | OpenAI's latest Whisper, strong general accuracy |
+| `deepgram` | `nova-3` | `DEEPGRAM_API_KEY` | Low latency |
+| `openai` | `gpt-realtime-whisper` | `OPENAI_API_KEY` | Whisper via OpenAI Realtime API, word-by-word streaming |
 
 ```env
 STT_PROVIDER=deepgram
@@ -225,10 +224,6 @@ DEEPGRAM_API_KEY=...
 # or
 STT_PROVIDER=openai
 OPENAI_API_KEY=sk-...
-
-# or
-STT_PROVIDER=
-#if LLM_PROVIDER=realtime
 ```
 
 ### Verify before starting
@@ -559,7 +554,7 @@ SELECT
     slot_start::TIME,
     'available'
 FROM
-    UNNEST(ARRAY['Dr. Meera Nair', 'Dr. Arun Sharma']) AS doctor,
+    UNNEST(ARRAY['Dr. Sarah Lin', 'Dr. James Cole']) AS doctor,
     generate_series(
         CURRENT_DATE,
         CURRENT_DATE + INTERVAL '60 days',
@@ -621,8 +616,8 @@ Supabase `slots` is the source of truth. Google Calendar is a write-only mirror 
 
 ```env
 GOOGLE_CALENDAR_CREDENTIALS_JSON=./service-account.json
-GOOGLE_CALENDAR_ID_MEERA=abc123@group.calendar.google.com
-GOOGLE_CALENDAR_ID_ARUN=xyz456@group.calendar.google.com
+GOOGLE_CALENDAR_ID_SARAH=abc123@group.calendar.google.com
+GOOGLE_CALENDAR_ID_JAMES=xyz456@group.calendar.google.com
 ```
 
 **Test:**
@@ -630,7 +625,7 @@ GOOGLE_CALENDAR_ID_ARUN=xyz456@group.calendar.google.com
 ```bash
 python scripts/test_calendar.py status
 python scripts/test_calendar.py create --dry-run
-python scripts/test_calendar.py create --doctor "Dr. Meera Nair"
+python scripts/test_calendar.py create --doctor "Dr. Sarah Lin"
 ```
 
 Without Calendar configured, logs show `Calendar mirror disabled - skipping` and bookings work normally. If credentials are misconfigured, the agent logs an error but the booking and WhatsApp confirmation still go through.
@@ -645,7 +640,7 @@ The `transcript` column is a JSONB array of turns:
 
 ```json
 [
-  {"role": "agent", "text": "Hello, I'm Priya...", "ts": 0.0},
+  {"role": "agent", "text": "Hello, I'm Aria...", "ts": 0.0},
   {"role": "user",  "text": "Hi, I want to book an appointment", "ts": 3.2}
 ]
 ```

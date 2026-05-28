@@ -73,7 +73,7 @@ def main() -> None:
     resp = client.request(
         "POST",
         "https://content.twilio.com/v1/TwiMLBins",
-        data={"FriendlyName": "Arogya Clinic — LiveKit SIP", "Body": TWIML_BODY},
+        data={"FriendlyName": "The Clinic — LiveKit SIP", "Body": TWIML_BODY},
     )
     if getattr(resp, "ok", False):
         payload = json.loads(resp.content)

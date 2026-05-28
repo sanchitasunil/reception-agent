@@ -1,5 +1,5 @@
 """
-Cancellation and rescheduling tools for the Arogya Clinic voice agent.
+Cancellation and rescheduling tools for The Clinic voice agent.
 Both tools operate on the Supabase slots and appointments tables.
 Cancellation frees a slot. Rescheduling cancels + rebooks atomically.
 """
@@ -13,7 +13,8 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any
 
-import pytz
+from datetime import timezone
+
 from livekit.agents import RunContext, function_tool, get_job_context
 from pydantic import Field
 from twilio.rest import Client
@@ -24,18 +25,18 @@ from tools.memory import _normalize_phone, get_client, log_appointment
 from tools.transcript import get_call_session
 
 logger = logging.getLogger(__name__)
-IST = pytz.timezone("Asia/Kolkata")
+UTC = timezone.utc
 
-CLINIC_PHONE = "080-41234567"
+CLINIC_PHONE = "555-0142"
 
 
 def normalise_doctor(doctor: str) -> str:
     """Match doctor name to canonical form."""
     d = doctor.strip()
-    if "meera" in d.lower():
-        return "Dr. Meera Nair"
-    if "arun" in d.lower():
-        return "Dr. Arun Sharma"
+    if "sarah" in d.lower() or "lin" in d.lower():
+        return "Dr. Sarah Lin"
+    if "james" in d.lower() or "cole" in d.lower():
+        return "Dr. James Cole"
     return d
 
 
@@ -105,7 +106,7 @@ def _parse_preferred_datetime(new_date: str, new_time: str) -> tuple[str | None,
 def _lookup_upcoming_sync(phone: str) -> dict[str, Any] | None:
     client = get_client()
     normalized = _normalize_phone(phone)
-    today = datetime.now(IST).date().isoformat()
+    today = datetime.now(UTC).date().isoformat()
 
     slot_resp = (
         client.table("slots")
@@ -168,7 +169,7 @@ async def lookup_upcoming_appointment(phone: str) -> dict[str, Any] | None:
 
 def _free_slot_sync(slot_id: str, booking_id: str) -> bool:
     client = get_client()
-    now = datetime.now(IST).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     slot_resp = (
         client.table("slots")
@@ -264,7 +265,7 @@ async def send_whatsapp_cancellation(
     booking_id: str,
 ) -> bool:
     body = (
-        f"Hi {patient_name}, your appointment at Arogya Clinic has been cancelled.\n"
+        f"Hi {patient_name}, your appointment at The Clinic has been cancelled.\n"
         f"\n"
         f"Cancelled appointment:\n"
         f"Doctor: {doctor}\n"
@@ -272,10 +273,10 @@ async def send_whatsapp_cancellation(
         f"Time: {spoken_time}\n"
         f"Ref: {booking_id}\n"
         f"\n"
-        f"To book a new appointment, call us on {CLINIC_PHONE} or speak to Priya.\n"
+        f"To book a new appointment, call us on {CLINIC_PHONE} or speak to Aria.\n"
         f"We hope to see you soon.\n"
         f"\n"
-        f"— Arogya Clinic"
+        f"— The Clinic"
     )
     try:
         return await asyncio.to_thread(_send_whatsapp_message_sync, phone, body)
@@ -295,7 +296,7 @@ async def send_whatsapp_reschedule(
     new_booking_id: str,
 ) -> bool:
     body = (
-        f"Hi {patient_name}, your appointment at Arogya Clinic has been rescheduled.\n"
+        f"Hi {patient_name}, your appointment at The Clinic has been rescheduled.\n"
         f"\n"
         f"Previous appointment:\n"
         f"{old_spoken_date} at {old_spoken_time} with {doctor}\n"
@@ -306,11 +307,11 @@ async def send_whatsapp_reschedule(
         f"Time: {new_spoken_time}\n"
         f"Ref: {new_booking_id}\n"
         f"\n"
-        f"📍 45, 5th Cross, Koramangala 4th Block, Bangalore 560034\n"
+        f"📍 14 Birch Lane, Suite 2, Maplewood\n"
         f"\n"
         f"To cancel, call {CLINIC_PHONE} at least 2 hours before your appointment.\n"
         f"\n"
-        f"— Arogya Clinic"
+        f"— The Clinic"
     )
     try:
         return await asyncio.to_thread(_send_whatsapp_message_sync, phone, body)

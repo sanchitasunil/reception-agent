@@ -52,7 +52,7 @@ if STT_PROVIDER == "deepgram" and not DEEPGRAM_API_KEY:
 if STT_PROVIDER == "openai" and not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY is required when STT_PROVIDER=openai")
 
-# LLM provider — "opencode" | "ollama" | "gemini" | "openai" | "realtime"
+# LLM provider — "opencode" | "gemini" | "openai"
 LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "opencode")
 GOOGLE_API_KEY: str | None = os.getenv("GOOGLE_API_KEY") or None
 OPENCODE_API_KEY: str | None = os.getenv("OPENCODE_API_KEY") or None
@@ -61,8 +61,8 @@ if LLM_PROVIDER == "gemini" and not GOOGLE_API_KEY:
     raise ValueError("GOOGLE_API_KEY is required when LLM_PROVIDER=gemini")
 if LLM_PROVIDER == "opencode" and not OPENCODE_API_KEY:
     raise ValueError("OPENCODE_API_KEY is required when LLM_PROVIDER=opencode")
-if LLM_PROVIDER in ("openai", "realtime") and not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY is required when LLM_PROVIDER=openai or realtime")
+if LLM_PROVIDER == "openai" and not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
 
 # Murf TTS
 MURF_API_KEY: str = _require("MURF_API_KEY")
@@ -81,16 +81,16 @@ SUPABASE_KEY: str = _require("SUPABASE_KEY")
 
 # Google Calendar mirror (optional — agent works without this)
 GOOGLE_CALENDAR_CREDENTIALS_JSON: str | None = os.getenv("GOOGLE_CALENDAR_CREDENTIALS_JSON")
-GOOGLE_CALENDAR_ID_MEERA: str | None = os.getenv("GOOGLE_CALENDAR_ID_MEERA")
-GOOGLE_CALENDAR_ID_ARUN: str | None = os.getenv("GOOGLE_CALENDAR_ID_ARUN")
+GOOGLE_CALENDAR_ID_SARAH: str | None = os.getenv("GOOGLE_CALENDAR_ID_SARAH")
+GOOGLE_CALENDAR_ID_JAMES: str | None = os.getenv("GOOGLE_CALENDAR_ID_JAMES")
 
 
 def calendar_enabled() -> bool:
     return all(
         [
             GOOGLE_CALENDAR_CREDENTIALS_JSON,
-            GOOGLE_CALENDAR_ID_MEERA,
-            GOOGLE_CALENDAR_ID_ARUN,
+            GOOGLE_CALENDAR_ID_SARAH,
+            GOOGLE_CALENDAR_ID_JAMES,
         ]
     )
 
