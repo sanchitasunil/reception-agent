@@ -126,7 +126,7 @@ Open `.env` and fill in every value. The table below shows where to find each on
 | `DEEPGRAM_API_KEY` | [console.deepgram.com](https://console.deepgram.com) |
 | `LLM_PROVIDER` | | gemini or opencode or any other |
 | `GOOGLE_API_KEY` | [aistudio.google.com](https://aistudio.google.com) > API keys |
-| `MURF_API_KEY` | murf.ai > Settings > API |
+| `MURF_API_KEY` | [murf.ai](https://murf.ai/api/dashboard) > Settings > API |
 | `TWILIO_ACCOUNT_SID` | [console.twilio.com](https://console.twilio.com) > Account Info |
 | `TWILIO_AUTH_TOKEN` | Same page as SID |
 | `TWILIO_PHONE_NUMBER` | Your Twilio number in E.164 format (e.g. `+12015551234`) |
