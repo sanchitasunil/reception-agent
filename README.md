@@ -4,14 +4,9 @@ A fully autonomous voice agent designed to handle inbound clinic calls, schedule
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![LiveKit](https://img.shields.io/badge/Transport-LiveKit%20Agents-002cf2)](https://docs.livekit.io/agents)
-<<<<<<< HEAD
 [![STT](https://img.shields.io/badge/STT-Deepgram%20%7C%20OpenAI%20Whisper-13EF93?logoColor=black)](https://deepgram.com)
 [![LLM](https://img.shields.io/badge/LLM-OpenCode%20%7C%20OpenAI%20%7C%20Gemini%20%7C%20Ollama%20%7C%20Realtime-4285F4?logo=google&logoColor=white)](https://opencode.ai)
-[![Murf](https://img.shields.io/badge/TTS-Murf%20Falcon-6366F1)](https://murf.ai/voices)
-=======
-[![Deepgram](https://img.shields.io/badge/STT-Deepgram%20Nova--3-13EF93?logoColor=black)](https://deepgram.com)
 [![Murf](https://img.shields.io/badge/TTS-Murf%20Falcon-6366F1)](https://murf.ai/api)
->>>>>>> f8d1f483148ca6703605673dcbda511ba02a3f65
 [![Twilio](https://img.shields.io/badge/Phone-Twilio%20SIP-F22F46?logo=twilio&logoColor=white)](https://twilio.com)
 [![Supabase](https://img.shields.io/badge/Database-Supabase-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com)
 
