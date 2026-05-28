@@ -4,8 +4,7 @@ A fully autonomous voice agent designed to handle inbound clinic calls, schedule
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![LiveKit](https://img.shields.io/badge/Transport-LiveKit%20Agents-002cf2)](https://docs.livekit.io/agents)
-[![STT](https://img.shields.io/badge/STT-Deepgram%20%7C%20OpenAI%20Whisper-13EF93?logoColor=black)](https://deepgram.com)
-[![LLM](https://img.shields.io/badge/LLM-OpenCode%20%7C%20OpenAI%20%7C%20Gemini%20%7C%20Ollama%20%7C%20Realtime-4285F4?logo=google&logoColor=white)](https://opencode.ai)
+[![STT](https://img.shields.io/badge/STT-Deepgram%20%7C%20OpenAI%20Whisper-13EF93?logoColor=black)]
 [![Murf](https://img.shields.io/badge/TTS-Murf%20Falcon-6366F1)](https://murf.ai/api)
 [![Twilio](https://img.shields.io/badge/Phone-Twilio%20SIP-F22F46?logo=twilio&logoColor=white)](https://twilio.com)
 [![Supabase](https://img.shields.io/badge/Database-Supabase-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com)
@@ -33,8 +32,8 @@ flowchart LR
     B -->|TwiML → SIP| C["LiveKit SIP Trunk"]
     C -->|dispatch rule| D["clinic-agent"]
 
-    D -->|audio| E["Deepgram STT"]
-    E -->|transcript| F["Gemini Flash"]
+    D -->|audio| E["STT"]
+    E -->|transcript| F["LLM"]
     F -->|reply text| G["Murf Falcon TTS"]
     G -->|audio| D
 
@@ -125,20 +124,13 @@ Open `.env` and fill in every value. The table below shows where to find each on
 | `LIVEKIT_API_KEY` | LiveKit Cloud > Settings > API Keys |
 | `LIVEKIT_API_SECRET` | Same page as API key |
 | `LIVEKIT_SIP_URI` | LiveKit Cloud > Telephony > SIP URI (hostname only, no `sip:` prefix) |
-<<<<<<< HEAD
 | `STT_PROVIDER` | `deepgram` or `openai` — see [LLM and STT providers](#2-llm-and-stt-providers) |
 | `DEEPGRAM_API_KEY` | [console.deepgram.com](https://console.deepgram.com) — required if `STT_PROVIDER=deepgram` |
-| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) — required if `STT_PROVIDER=openai` |
-| `LLM_PROVIDER` | `opencode`, `openai`, `gemini`, `ollama`, or `realtime` — see [LLM and STT providers](#2-llm-and-stt-providers) |
+| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) — required if `STT_PROVIDER=openai` or `LLM_PROVIDER=realtime` or `LLM_PROVIDER=openai` |
+| `LLM_PROVIDER` | `opencode`, `openai`, `gemini` or `realtime` — see [LLM and STT providers](#2-llm-and-stt-providers) |
 | `OPENCODE_API_KEY` | [opencode.ai](https://opencode.ai) — required if `LLM_PROVIDER=opencode` |
 | `GOOGLE_API_KEY` | [aistudio.google.com](https://aistudio.google.com) — required if `LLM_PROVIDER=gemini` |
-| `MURF_API_KEY` | murf.ai > Settings > API |
-=======
-| `DEEPGRAM_API_KEY` | [console.deepgram.com](https://console.deepgram.com) |
-| `LLM_PROVIDER` | | gemini or opencode or any other |
-| `GOOGLE_API_KEY` | [aistudio.google.com](https://aistudio.google.com) > API keys |
 | `MURF_API_KEY` | [murf.ai](https://murf.ai/api/dashboard) > Settings > API |
->>>>>>> f8d1f483148ca6703605673dcbda511ba02a3f65
 | `TWILIO_ACCOUNT_SID` | [console.twilio.com](https://console.twilio.com) > Account Info |
 | `TWILIO_AUTH_TOKEN` | Same page as SID |
 | `TWILIO_PHONE_NUMBER` | Your Twilio number in E.164 format (e.g. `+12015551234`) |
@@ -199,23 +191,18 @@ Set `LLM_PROVIDER` in `.env`:
 
 | Value | Model | API key needed | Notes |
 |---|---|---|---|
-| `opencode` (default) | `kimi-k2.5` via OpenCode Go | `OPENCODE_API_KEY` | |
+| `opencode` | `kimi-k2.5` via OpenCode Go | `OPENCODE_API_KEY` | |
 | `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` | |
 | `gemini` | `gemini-2.0-flash` | `GOOGLE_API_KEY` | |
-| `ollama` | `llama3.2:3b` (local) | none — install [Ollama](https://ollama.com/download) and run `ollama pull llama3.2:3b` | |
-| `realtime` | `gpt-4o-realtime-preview` | `OPENAI_API_KEY` | Handles STT+LLM internally; no separate `STT_PROVIDER` needed. Murf still handles TTS. |
+| `realtime` | `gpt-4o-realtime-preview` | `OPENAI_API_KEY` | Handles STT+LLM internally; no separate `STT_PROVIDER` needed. Murf handles TTS. |
 
 ```env
-LLM_PROVIDER=opencode
-OPENCODE_API_KEY=sk-...
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
 
 # or
 LLM_PROVIDER=gemini
 GOOGLE_API_KEY=AIza...
-
-# or
-LLM_PROVIDER=ollama
-# no key needed — Ollama runs locally
 
 # or
 LLM_PROVIDER=realtime
@@ -223,17 +210,13 @@ OPENAI_API_KEY=sk-...
 # STT_PROVIDER is ignored — realtime model handles transcription
 ```
 
-**OpenCode Go** ([opencode.ai/go](https://opencode.ai/go)) is a paid subscription that provides access to many open-source models (Kimi, DeepSeek, Qwen, MiniMax, GLM). Note: models with built-in reasoning/thinking mode (e.g. DeepSeek V4 Flash) are not compatible with LiveKit's streaming pipeline — use `kimi-k2.5` or `qwen3.5-plus` instead.
-
-**Ollama** runs entirely on your machine. Requires a GPU for usable latency — a 6 GB+ VRAM card can run `llama3.2:3b` at ~1–3s response time, acceptable for testing. Not recommended for production.
-
 ### STT
 
 Set `STT_PROVIDER` in `.env`:
 
 | Value | Model | API key needed | Notes |
 |---|---|---|---|
-| `deepgram` (default) | `nova-3`, `en-IN` | `DEEPGRAM_API_KEY` | Best for Indian English accents |
+| `deepgram` | `nova-3`, `en-IN` | `DEEPGRAM_API_KEY` | Best for Indian English accents |
 | `openai` | `gpt-4o-transcribe` | `OPENAI_API_KEY` | OpenAI's latest Whisper, strong general accuracy |
 
 ```env
@@ -243,6 +226,10 @@ DEEPGRAM_API_KEY=...
 # or
 STT_PROVIDER=openai
 OPENAI_API_KEY=sk-...
+
+# or
+STT_PROVIDER=
+#if LLM_PROVIDER=realtime
 ```
 
 ### Verify before starting
@@ -257,7 +244,7 @@ This automatically tests whichever providers are configured and prints OK or FAI
 
 ## 3. Telephony, WhatsApp, and Call handoff
 
-Everything call-related in one place: routing real phone calls to the agent, sending WhatsApp confirmations, and transferring to a human.
+Everything call-related: routing real phone calls to the agent, sending WhatsApp confirmations, and transferring to a human.
 
 ### How the routing works
 
