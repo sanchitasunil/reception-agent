@@ -627,7 +627,7 @@ A general consultation is 500 rupees. A follow-up within two weeks is 350 rupees
 | Embedding model | `all-MiniLM-L6-v2` (~80 MB, downloaded once) |
 | Retrieval | Top-3 nearest chunks by cosine similarity |
 
-More on the models: [all-MiniLM-L6-v2 on HuggingFace](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) — [LanceDB docs]((https://docs.lancedb.com/))
+More on the models: [all-MiniLM-L6-v2 on HuggingFace](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) — [LanceDB docs](https://docs.lancedb.com/)
 
 ---
 
@@ -763,7 +763,7 @@ Update `supabase/functions/seed-slots/index.ts` for your opening hours, days, an
 - [LiveKit Agents Playground](https://agents-playground.livekit.io/) — browser-based testing, no phone needed
 - [LiveKit docs: Accepting inbound Twilio calls](https://docs.livekit.io/telephony/accepting-calls/inbound-twilio/)
 - [Deepgram console](https://console.deepgram.com)
-- [Murf AI]((https://murf.ai/api/dashboard)) 
+- [Murf AI](https://murf.ai/api/dashboard) 
 - [Twilio console](https://console.twilio.com)
 - [Twilio WhatsApp sandbox](https://www.twilio.com/console/sms/whatsapp/sandbox)
 - [Supabase](https://supabase.com)
@@ -771,6 +771,6 @@ Update `supabase/functions/seed-slots/index.ts` for your opening hours, days, an
 
 **Libraries and models**
 
-- [LanceDB]((https://docs.lancedb.com/)) — vector store for FAQ search
+- [LanceDB](https://docs.lancedb.com/) — vector store for FAQ search
 - [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) — FAQ embedding model
 - [Silero VAD](https://github.com/snakers4/silero-vad) — voice activity detection
