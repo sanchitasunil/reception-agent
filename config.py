@@ -45,8 +45,15 @@ LIVEKIT_SIP_URI: str = _normalize_sip_uri(_require("LIVEKIT_SIP_URI"))
 # Deepgram STT
 DEEPGRAM_API_KEY: str = _require("DEEPGRAM_API_KEY")
 
-# Google Gemini LLM
-GOOGLE_API_KEY: str = _require("GOOGLE_API_KEY")
+# LLM provider — "opencode" | "ollama" | "gemini"
+LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "opencode")
+GOOGLE_API_KEY: str | None = os.getenv("GOOGLE_API_KEY") or None
+OPENCODE_API_KEY: str | None = os.getenv("OPENCODE_API_KEY") or None
+
+if LLM_PROVIDER == "gemini" and not GOOGLE_API_KEY:
+    raise ValueError("GOOGLE_API_KEY is required when LLM_PROVIDER=gemini")
+if LLM_PROVIDER == "opencode" and not OPENCODE_API_KEY:
+    raise ValueError("OPENCODE_API_KEY is required when LLM_PROVIDER=opencode")
 
 # Murf TTS
 MURF_API_KEY: str = _require("MURF_API_KEY")

@@ -1,7 +1,7 @@
 # Call flow:
 # Phone call → Twilio number → TwiML Bin → LiveKit SIP URI
 # → SIP inbound trunk → dispatch rule → clinic-agent worker
-# → AgentSession (Deepgram STT → Gemini LLM → Murf TTS)
+# → AgentSession (Deepgram STT → LLM → Murf TTS)  [LLM_PROVIDER=ollama|gemini]
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from livekit.agents import tts as agents_tts
 from livekit.agents.tts import AudioEmitter
 from livekit.agents.types import APIConnectOptions
 from livekit.agents.utils import http_context as _http_ctx
-from livekit.plugins import deepgram, google, silero
+from livekit.plugins import deepgram, google, openai, silero
 from livekit.plugins import murf
 
 import config  # validates required env vars at import time
@@ -282,7 +282,9 @@ async def entrypoint(ctx: JobContext) -> None:
     tts_instance = ctx.proc.userdata.get("tts") or murf.TTS(voice="en-IN-anisha", locale="en-IN")
     session = AgentSession(
         stt=deepgram.STT(model="nova-3", language="en-IN"),
-        llm=google.LLM(model="gemini-2.0-flash"),
+        llm=google.LLM(model="gemini-2.0-flash") if config.LLM_PROVIDER == "gemini"
+        else openai.LLM(model="llama3.2:3b", base_url="http://localhost:11434/v1", api_key="ollama") if config.LLM_PROVIDER == "ollama"
+        else openai.LLM(model="kimi-k2.5", base_url="https://opencode.ai/zen/go/v1", api_key=config.OPENCODE_API_KEY),
         tts=tts_instance,
         vad=ctx.proc.userdata["vad"],
     )

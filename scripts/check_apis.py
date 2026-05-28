@@ -93,6 +93,92 @@ async def check_gemini() -> bool:
         return False
 
 
+async def _opencode_call(session: "aiohttp.ClientSession", model: str) -> tuple[bool, str]:
+    import aiohttp
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": "Reply with exactly three words: API is OK"}],
+        "max_tokens": 16,
+        "stream": False,
+    }
+    t0 = time.monotonic()
+    async with session.post(
+        "https://opencode.ai/zen/go/v1/chat/completions",
+        json=payload,
+        headers={"Authorization": f"Bearer {config.OPENCODE_API_KEY}"},
+        timeout=aiohttp.ClientTimeout(total=15),
+    ) as resp:
+        body = await resp.text()
+        elapsed = time.monotonic() - t0
+        if resp.status == 200:
+            import json as _json
+            data = _json.loads(body)
+            text = data["choices"][0]["message"]["content"].strip()
+            return True, f"response={text!r} ({elapsed * 1000:.0f}ms)"
+        return False, f"HTTP {resp.status}: {body[:200]}"
+
+
+async def check_opencode() -> bool:
+    print("=== OpenCode LLM ===")
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            ok, msg = await _opencode_call(session, "deepseek-v4-flash")
+            if ok:
+                print(f"  OK  deepseek-v4-flash — {msg}")
+                return True
+            print(f"  FAIL  deepseek-v4-flash — {msg}")
+            # Try a fallback model to tell apart "model down" from "bad key"
+            ok2, msg2 = await _opencode_call(session, "kimi-k2.5")
+            if ok2:
+                print(f"  WARN  kimi-k2.5 works — deepseek-v4-flash may be temporarily down")
+                print(f"        Switch agent to kimi-k2.5 or retry later")
+                return False
+            if "401" in msg or "403" in msg or "401" in msg2 or "403" in msg2:
+                print("  Fix: check OPENCODE_API_KEY in .env")
+            else:
+                print("  OpenCode server error — try again later or switch model")
+            return False
+    except Exception as exc:
+        print(f"  FAIL  {exc}")
+        return False
+
+
+async def check_ollama() -> bool:
+    print("=== Ollama LLM (llama3.2:3b) ===")
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "http://localhost:11434/api/tags",
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp:
+                if resp.status != 200:
+                    print("  FAIL  Ollama not running — start it or run: ollama serve")
+                    return False
+                data = await resp.json()
+                models = [m["name"] for m in data.get("models", [])]
+                if not any("llama3.2" in m for m in models):
+                    print(f"  FAIL  llama3.2:3b not pulled. Run: ollama pull llama3.2:3b")
+                    print(f"        Available models: {models or 'none'}")
+                    return False
+                print(f"  OK  Ollama running, llama3.2:3b available")
+                return True
+    except Exception as exc:
+        print(f"  FAIL  {exc}")
+        print("  Fix: install Ollama from ollama.com and run: ollama pull llama3.2:3b")
+        return False
+
+
+async def check_llm() -> bool:
+    if config.LLM_PROVIDER == "gemini":
+        return await check_gemini()
+    elif config.LLM_PROVIDER == "ollama":
+        return await check_ollama()
+    else:
+        return await check_opencode()
+
+
 async def check_livekit() -> bool:
     print("=== LiveKit ===")
     try:
@@ -177,7 +263,7 @@ async def main() -> None:
     checks = [
         ("Deepgram", check_deepgram()),
         ("Murf",     check_murf()),
-        ("Gemini",   check_gemini()),
+        ("LLM",      check_llm()),
         ("LiveKit",  check_livekit()),
         ("Supabase", check_supabase()),
     ]

@@ -137,17 +137,27 @@ def build_system_prompt(patient: dict | None) -> str:
     if patient is None:
         return SYSTEM_PROMPT
 
+    last_appt = patient.get('last_appointment_date', 'unknown')
+    last_time = patient.get('last_appointment_time', 'unknown')
+    last_doctor = patient.get('preferred_doctor', 'unknown')
+    last_ref = patient.get('last_booking_id', 'unknown')
+    has_appointment = last_appt not in ('unknown', None)
+
+    appt_line = (
+        f"- Upcoming/last appointment: {last_appt} at {last_time} with {last_doctor} (ref: {last_ref})"
+        if has_appointment else
+        "- No previous appointment on record."
+    )
+
     memory_block = f"""
 ## Caller memory
 You already know this caller. Do not ask for their name or phone number again.
 - Name: {patient['name']}
-- Preferred doctor: {patient.get('preferred_doctor', 'no preference recorded')}
-- Last appointment: {patient.get('last_appointment_date', 'unknown')} at {patient.get('last_appointment_time', 'unknown')} with {patient.get('preferred_doctor', 'unknown')}
-- Last booking ref: {patient.get('last_booking_id', 'unknown')}
+- Preferred doctor: {last_doctor}
+{appt_line}
 - Times called before: {patient.get('call_count', 1)}
 
-Greet them warmly by name. Example opening:
-"Hello {patient['name']}, welcome back to Arogya Clinic. How can I help you today?"
-Do not say "May I know your name" - you already know it.
+Greet them warmly by name. If they mention "my appointment", "reschedule", "cancel", or anything about an existing booking, refer to the appointment above — do not ask them to repeat details you already have.
+Do not say "May I know your name" or "Can I have your booking reference" — you already know both.
 """
     return SYSTEM_PROMPT + memory_block

@@ -23,6 +23,8 @@ async def book_appointment(
     time: str,
     doctor: str,
     reason: str,
+    iso_date: str | None = None,
+    iso_time: str | None = None,
 ) -> dict[str, Any]:
     """
     Call this only after you have collected all booking details and the patient
@@ -30,10 +32,13 @@ async def book_appointment(
 
     Use when the caller wants to book a new appointment and has agreed to proceed.
     Do not call without verbal confirmation first.
+
+    iso_date and iso_time: pass the values returned by check_availability
+    (format: "2026-05-29" and "15:00"). If omitted, the next available slot is used.
     """
     booking_id = f"ARG-{random.randint(1000, 9999)}"
 
-    slot = await find_available_slot(doctor)
+    slot = await find_available_slot(doctor, iso_date, iso_time)
     if not slot.get("available") or not slot.get("slot_id"):
         logger.warning("No available slot for %s", doctor)
         return {
