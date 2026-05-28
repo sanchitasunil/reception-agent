@@ -1,7 +1,7 @@
 # Call flow:
 # Phone call → Twilio number → TwiML Bin → LiveKit SIP URI
 # → SIP inbound trunk → dispatch rule → clinic-agent worker
-# → AgentSession (Deepgram STT → LLM → Murf TTS)  [LLM_PROVIDER=ollama|gemini]
+# → AgentSession (STT(Deepgram or Whisper Realtime) → LLM → TTS(Murf Falcon))  [LLM_PROVIDER=realtime/gemini/opencode]
 
 from __future__ import annotations
 
@@ -56,8 +56,8 @@ logging.getLogger("h2").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 OPENING_LINE = (
-    "Hello, thank you for calling Arogya Clinic. I'm Priya, your AI "
-    "receptionist. How may I help you today?"
+    "Hello, thank you for calling Arogya Clinic. I'm Priya, your AI receptionist. "
+    "How may I help you today?"
 )
 
 
@@ -65,8 +65,8 @@ def _opening_line_for_patient(patient_memory: dict | None) -> str:
     if patient_memory and patient_memory.get("name"):
         name = patient_memory["name"]
         return (
-            f"Hello {name}, welcome back to Arogya Clinic. I'm Priya, your AI "
-            f"receptionist. How can I help you today?"
+            f"Hello {name}, welcome back to Arogya Clinic. I'm Priya, your AI receptionist. "
+            f"How can I help you today?"
         )
     return OPENING_LINE
 
@@ -280,14 +280,27 @@ async def entrypoint(ctx: JobContext) -> None:
     logger.info("Connected to %s (%.1fs)", ctx.room.name, time.monotonic() - t0)
 
     tts_instance = ctx.proc.userdata.get("tts") or murf.TTS(voice="en-IN-anisha", locale="en-IN")
-    session = AgentSession(
-        stt=deepgram.STT(model="nova-3", language="en-IN"),
-        llm=google.LLM(model="gemini-2.0-flash") if config.LLM_PROVIDER == "gemini"
-        else openai.LLM(model="llama3.2:3b", base_url="http://localhost:11434/v1", api_key="ollama") if config.LLM_PROVIDER == "ollama"
-        else openai.LLM(model="kimi-k2.5", base_url="https://opencode.ai/zen/go/v1", api_key=config.OPENCODE_API_KEY),
-        tts=tts_instance,
-        vad=ctx.proc.userdata["vad"],
-    )
+
+    if config.LLM_PROVIDER == "realtime":
+        # RealtimeModel handles STT internally — no separate stt= needed
+        session = AgentSession(
+            llm=openai.realtime.RealtimeModel(
+                modalities=["text"],
+                api_key=config.OPENAI_API_KEY,
+            ),
+            tts=tts_instance,
+            vad=ctx.proc.userdata["vad"],
+        )
+    else:
+        session = AgentSession(
+            stt=openai.STT(model="gpt-4o-transcribe", language="en", api_key=config.OPENAI_API_KEY) if config.STT_PROVIDER == "openai"
+            else deepgram.STT(model="nova-3", language="en-IN"),
+            llm=google.LLM(model="gemini-2.5-flash") if config.LLM_PROVIDER == "gemini"
+            else openai.LLM(model="gpt-4o-mini", api_key=config.OPENAI_API_KEY) if config.LLM_PROVIDER == "openai"
+            else openai.LLM(model="kimi-k2.5", base_url="https://opencode.ai/zen/go/v1", api_key=config.OPENCODE_API_KEY),
+            tts=tts_instance,
+            vad=ctx.proc.userdata["vad"],
+        )
 
     caller_phone = await _resolve_caller_phone(ctx, is_phone)
     patient_memory = None

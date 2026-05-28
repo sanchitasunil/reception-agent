@@ -41,6 +41,56 @@ async def check_deepgram() -> bool:
         return False
 
 
+async def check_openai_stt() -> bool:
+    print("=== OpenAI STT (gpt-4o-transcribe) ===")
+    try:
+        import aiohttp, io
+        # Send a minimal silent WAV (44 bytes) — just enough to validate auth and model access
+        wav_header = bytes([
+            0x52,0x49,0x46,0x46,0x24,0x00,0x00,0x00,0x57,0x41,0x56,0x45,
+            0x66,0x6D,0x74,0x20,0x10,0x00,0x00,0x00,0x01,0x00,0x01,0x00,
+            0x22,0x56,0x00,0x00,0x44,0xAC,0x00,0x00,0x02,0x00,0x10,0x00,
+            0x64,0x61,0x74,0x61,0x00,0x00,0x00,0x00,
+        ])
+        form = aiohttp.FormData()
+        form.add_field("model", "gpt-4o-transcribe")
+        form.add_field("language", "en")
+        form.add_field("file", io.BytesIO(wav_header), filename="test.wav", content_type="audio/wav")
+        t0 = time.monotonic()
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.openai.com/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}"},
+                data=form,
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                elapsed = time.monotonic() - t0
+                body = await resp.text()
+                if resp.status == 200:
+                    print(f"  OK  gpt-4o-transcribe reachable ({elapsed * 1000:.0f}ms)")
+                    return True
+                elif resp.status in (400, 422):
+                    # 400 from a silent/empty file is expected — means auth + model are fine
+                    print(f"  OK  authenticated, model accessible ({elapsed * 1000:.0f}ms)")
+                    return True
+                elif resp.status in (401, 403):
+                    print(f"  FAIL  HTTP {resp.status}: {body[:200]}")
+                    print("  Fix: check OPENAI_API_KEY in .env")
+                    return False
+                else:
+                    print(f"  FAIL  HTTP {resp.status}: {body[:200]}")
+                    return False
+    except Exception as exc:
+        print(f"  FAIL  {exc}")
+        return False
+
+
+async def check_stt() -> bool:
+    if config.STT_PROVIDER == "openai":
+        return await check_openai_stt()
+    return await check_deepgram()
+
+
 async def check_murf() -> bool:
     print("=== Murf TTS ===")
     try:
@@ -170,11 +220,85 @@ async def check_ollama() -> bool:
         return False
 
 
+async def check_openai_llm() -> bool:
+    print("=== OpenAI LLM (gpt-4o-mini) ===")
+    try:
+        import aiohttp
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": "Reply with exactly three words: API is OK"}],
+            "max_tokens": 16,
+        }
+        t0 = time.monotonic()
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.openai.com/v1/chat/completions",
+                json=payload,
+                headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}"},
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                elapsed = time.monotonic() - t0
+                body = await resp.text()
+                if resp.status == 200:
+                    import json as _json
+                    data = _json.loads(body)
+                    text = data["choices"][0]["message"]["content"].strip()
+                    print(f"  OK  response={text!r} ({elapsed * 1000:.0f}ms)")
+                    return True
+                elif resp.status in (401, 403):
+                    print(f"  FAIL  HTTP {resp.status}: {body[:200]}")
+                    print("  Fix: check OPENAI_API_KEY in .env")
+                    return False
+                else:
+                    print(f"  FAIL  HTTP {resp.status}: {body[:200]}")
+                    return False
+    except Exception as exc:
+        print(f"  FAIL  {exc}")
+        return False
+
+
+async def check_openai_realtime() -> bool:
+    print("=== OpenAI Realtime (gpt-4o-realtime-preview) ===")
+    try:
+        import aiohttp
+        # Validate the key has realtime access via the models endpoint
+        t0 = time.monotonic()
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://api.openai.com/v1/models/gpt-4o-realtime-preview",
+                headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                elapsed = time.monotonic() - t0
+                body = await resp.text()
+                if resp.status == 200:
+                    print(f"  OK  gpt-4o-realtime-preview accessible ({elapsed * 1000:.0f}ms)")
+                    return True
+                elif resp.status in (401, 403):
+                    print(f"  FAIL  HTTP {resp.status}: {body[:200]}")
+                    print("  Fix: check OPENAI_API_KEY in .env")
+                    return False
+                elif resp.status == 404:
+                    print(f"  FAIL  gpt-4o-realtime-preview not available on this account")
+                    print("  Fix: ensure your OpenAI account has Realtime API access")
+                    return False
+                else:
+                    print(f"  FAIL  HTTP {resp.status}: {body[:200]}")
+                    return False
+    except Exception as exc:
+        print(f"  FAIL  {exc}")
+        return False
+
+
 async def check_llm() -> bool:
     if config.LLM_PROVIDER == "gemini":
         return await check_gemini()
     elif config.LLM_PROVIDER == "ollama":
         return await check_ollama()
+    elif config.LLM_PROVIDER == "openai":
+        return await check_openai_llm()
+    elif config.LLM_PROVIDER == "realtime":
+        return await check_openai_realtime()
     else:
         return await check_opencode()
 
@@ -261,7 +385,7 @@ async def check_supabase() -> bool:
 
 async def main() -> None:
     checks = [
-        ("Deepgram", check_deepgram()),
+        ("STT",      check_stt()),
         ("Murf",     check_murf()),
         ("LLM",      check_llm()),
         ("LiveKit",  check_livekit()),

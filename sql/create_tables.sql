@@ -1,5 +1,5 @@
 -- =============================================================================
--- Arogya Clinic — reception-agent Supabase schema
+-- Supabase schema - written for a clinic, can be altered to match the needs of other businesses.
 --
 -- IMPORTANT: Select ALL of this file and run it once (Ctrl+A → Run).
 -- Do NOT run only the seed block at the bottom — that causes:

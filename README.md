@@ -4,8 +4,8 @@ An AI voice receptionist that picks up your phone line, books appointments, answ
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![LiveKit](https://img.shields.io/badge/Transport-LiveKit%20Agents-002cf2)](https://docs.livekit.io/agents)
-[![Deepgram](https://img.shields.io/badge/STT-Deepgram%20Nova--3-13EF93?logoColor=black)](https://deepgram.com)
-[![Gemini](https://img.shields.io/badge/LLM-Gemini%202.0%20Flash-4285F4?logo=google&logoColor=white)](https://aistudio.google.com)
+[![STT](https://img.shields.io/badge/STT-Deepgram%20%7C%20OpenAI%20Whisper-13EF93?logoColor=black)](https://deepgram.com)
+[![LLM](https://img.shields.io/badge/LLM-OpenCode%20%7C%20OpenAI%20%7C%20Gemini%20%7C%20Ollama%20%7C%20Realtime-4285F4?logo=google&logoColor=white)](https://opencode.ai)
 [![Murf](https://img.shields.io/badge/TTS-Murf%20Falcon-6366F1)](https://murf.ai/voices)
 [![Twilio](https://img.shields.io/badge/Phone-Twilio%20SIP-F22F46?logo=twilio&logoColor=white)](https://twilio.com)
 [![Supabase](https://img.shields.io/badge/Database-Supabase-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com)
@@ -59,15 +59,16 @@ flowchart LR
 ## Contents
 
 1. [Quick start](#1-quick-start)
-2. [Telephony, WhatsApp, and call handoff](#2-telephony-whatsapp-and-call-handoff)
-3. [Database, memory, and slots](#3-database-memory-and-slots)
-4. [Google Calendar](#4-google-calendar)
-5. [Transcript logging](#5-transcript-logging)
-6. [Knowledge base](#6-knowledge-base)
-7. [Project structure](#7-project-structure)
-8. [Adapting for your use case](#8-adapting-for-your-use-case)
-9. [Common errors](#9-common-errors)
-10. [Resources](#10-resources)
+2. [LLM and STT providers](#2-llm-and-stt-providers)
+3. [Telephony, WhatsApp, and call handoff](#3-telephony-whatsapp-and-call-handoff)
+4. [Database, memory, and slots](#4-database-memory-and-slots)
+5. [Google Calendar](#5-google-calendar)
+6. [Transcript logging](#6-transcript-logging)
+7. [Knowledge base](#7-knowledge-base)
+8. [Project structure](#8-project-structure)
+9. [Adapting for your use case](#9-adapting-for-your-use-case)
+10. [Common errors](#10-common-errors)
+11. [Resources](#11-resources)
 
 ---
 
@@ -124,8 +125,12 @@ Open `.env` and fill in every value. The table below shows where to find each on
 | `LIVEKIT_API_KEY` | LiveKit Cloud > Settings > API Keys |
 | `LIVEKIT_API_SECRET` | Same page as API key |
 | `LIVEKIT_SIP_URI` | LiveKit Cloud > Telephony > SIP URI (hostname only, no `sip:` prefix) |
-| `DEEPGRAM_API_KEY` | [console.deepgram.com](https://console.deepgram.com) |
-| `GOOGLE_API_KEY` | [aistudio.google.com](https://aistudio.google.com) > API keys |
+| `STT_PROVIDER` | `deepgram` or `openai` — see [LLM and STT providers](#2-llm-and-stt-providers) |
+| `DEEPGRAM_API_KEY` | [console.deepgram.com](https://console.deepgram.com) — required if `STT_PROVIDER=deepgram` |
+| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) — required if `STT_PROVIDER=openai` |
+| `LLM_PROVIDER` | `opencode`, `openai`, `gemini`, `ollama`, or `realtime` — see [LLM and STT providers](#2-llm-and-stt-providers) |
+| `OPENCODE_API_KEY` | [opencode.ai](https://opencode.ai) — required if `LLM_PROVIDER=opencode` |
+| `GOOGLE_API_KEY` | [aistudio.google.com](https://aistudio.google.com) — required if `LLM_PROVIDER=gemini` |
 | `MURF_API_KEY` | murf.ai > Settings > API |
 | `TWILIO_ACCOUNT_SID` | [console.twilio.com](https://console.twilio.com) > Account Info |
 | `TWILIO_AUTH_TOKEN` | Same page as SID |
@@ -177,7 +182,73 @@ Fix any failures before continuing.
 
 ---
 
-## 2. Telephony, WhatsApp, and Call handoff
+## 2. LLM and STT providers
+
+The LLM and STT are configurable via `.env` — no code changes needed to switch.
+
+### LLM
+
+Set `LLM_PROVIDER` in `.env`:
+
+| Value | Model | API key needed | Notes |
+|---|---|---|---|
+| `opencode` (default) | `kimi-k2.5` via OpenCode Go | `OPENCODE_API_KEY` | |
+| `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` | |
+| `gemini` | `gemini-2.0-flash` | `GOOGLE_API_KEY` | |
+| `ollama` | `llama3.2:3b` (local) | none — install [Ollama](https://ollama.com/download) and run `ollama pull llama3.2:3b` | |
+| `realtime` | `gpt-4o-realtime-preview` | `OPENAI_API_KEY` | Handles STT+LLM internally; no separate `STT_PROVIDER` needed. Murf still handles TTS. |
+
+```env
+LLM_PROVIDER=opencode
+OPENCODE_API_KEY=sk-...
+
+# or
+LLM_PROVIDER=gemini
+GOOGLE_API_KEY=AIza...
+
+# or
+LLM_PROVIDER=ollama
+# no key needed — Ollama runs locally
+
+# or
+LLM_PROVIDER=realtime
+OPENAI_API_KEY=sk-...
+# STT_PROVIDER is ignored — realtime model handles transcription
+```
+
+**OpenCode Go** ([opencode.ai/go](https://opencode.ai/go)) is a paid subscription that provides access to many open-source models (Kimi, DeepSeek, Qwen, MiniMax, GLM). Note: models with built-in reasoning/thinking mode (e.g. DeepSeek V4 Flash) are not compatible with LiveKit's streaming pipeline — use `kimi-k2.5` or `qwen3.5-plus` instead.
+
+**Ollama** runs entirely on your machine. Requires a GPU for usable latency — a 6 GB+ VRAM card can run `llama3.2:3b` at ~1–3s response time, acceptable for testing. Not recommended for production.
+
+### STT
+
+Set `STT_PROVIDER` in `.env`:
+
+| Value | Model | API key needed | Notes |
+|---|---|---|---|
+| `deepgram` (default) | `nova-3`, `en-IN` | `DEEPGRAM_API_KEY` | Best for Indian English accents |
+| `openai` | `gpt-4o-transcribe` | `OPENAI_API_KEY` | OpenAI's latest Whisper, strong general accuracy |
+
+```env
+STT_PROVIDER=deepgram
+DEEPGRAM_API_KEY=...
+
+# or
+STT_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+```
+
+### Verify before starting
+
+```bash
+python scripts/check_apis.py
+```
+
+This automatically tests whichever providers are configured and prints OK or FAIL for each.
+
+---
+
+## 3. Telephony, WhatsApp, and Call handoff
 
 Everything call-related in one place: routing real phone calls to the agent, sending WhatsApp confirmations, and transferring to a human.
 
@@ -352,7 +423,7 @@ python scripts/test_handoff.py refer --room clinic-XXXX --identity sip-XXXX
 
 ---
 
-## 3. Database, memory, and slots
+## 4. Database, memory, and slots
 
 All persistent data lives in Supabase: caller memory, appointment slots, booking records, and call transcripts.
 
@@ -544,7 +615,7 @@ ORDER BY start_time DESC LIMIT 5;
 
 ---
 
-## 4. Google Calendar
+## 5. Google Calendar
 
 Supabase `slots` is the source of truth. Google Calendar is a write-only mirror for clinic staff. The agent never reads from it.
 
@@ -575,7 +646,7 @@ Without Calendar configured, logs show `Calendar mirror disabled - skipping` and
 
 ---
 
-## 5. Transcript logging
+## 6. Transcript logging
 
 Every call produces one row in `call_logs` (created by `sql/create_tables.sql`).
 
@@ -599,7 +670,7 @@ View a transcript: Supabase dashboard > `call_logs` > expand the `transcript` ce
 
 ---
 
-## 6. Knowledge base
+## 7. Knowledge base
 
 The agent answers factual questions by searching `knowledge/clinic_faq.md`. It does not guess. If the FAQ has no useful answer it says so and offers a callback.
 
@@ -633,7 +704,7 @@ More on the models: [all-MiniLM-L6-v2 on HuggingFace](https://huggingface.co/sen
 
 ---
 
-## 7. Project structure
+## 8. Project structure
 
 ```
 reception-agent/
@@ -677,7 +748,7 @@ reception-agent/
 
 ---
 
-## 8. Adapting for your use case
+## 9. Adapting for your use case
 
 The clinic persona is a thin configuration layer on top of a general-purpose call agent. The voice pipeline, slot system, memory, WhatsApp, and transcripts are all business-agnostic. Here is what to change.
 
@@ -740,7 +811,7 @@ Update `supabase/functions/seed-slots/index.ts` for your opening hours, days, an
 
 ---
 
-## 9. Common errors
+## 10. Common errors
 
 | Error | Cause | Fix |
 |---|---|---|
@@ -757,7 +828,7 @@ Update `supabase/functions/seed-slots/index.ts` for your opening hours, days, an
 
 ---
 
-## 10. Resources
+## 11. Resources
 
 **Services**
 

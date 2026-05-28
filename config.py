@@ -42,10 +42,17 @@ LIVEKIT_API_KEY: str = _require("LIVEKIT_API_KEY")
 LIVEKIT_API_SECRET: str = _require("LIVEKIT_API_SECRET")
 LIVEKIT_SIP_URI: str = _normalize_sip_uri(_require("LIVEKIT_SIP_URI"))
 
-# Deepgram STT
-DEEPGRAM_API_KEY: str = _require("DEEPGRAM_API_KEY")
+# STT provider — "deepgram" or "openai" (gpt-4o-transcribe / Whisper)
+STT_PROVIDER: str = os.getenv("STT_PROVIDER", "deepgram")
+DEEPGRAM_API_KEY: str | None = os.getenv("DEEPGRAM_API_KEY") or None
+OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY") or None
 
-# LLM provider — "opencode" | "ollama" | "gemini"
+if STT_PROVIDER == "deepgram" and not DEEPGRAM_API_KEY:
+    raise ValueError("DEEPGRAM_API_KEY is required when STT_PROVIDER=deepgram")
+if STT_PROVIDER == "openai" and not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY is required when STT_PROVIDER=openai")
+
+# LLM provider — "opencode" | "ollama" | "gemini" | "openai" | "realtime"
 LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "opencode")
 GOOGLE_API_KEY: str | None = os.getenv("GOOGLE_API_KEY") or None
 OPENCODE_API_KEY: str | None = os.getenv("OPENCODE_API_KEY") or None
@@ -54,6 +61,8 @@ if LLM_PROVIDER == "gemini" and not GOOGLE_API_KEY:
     raise ValueError("GOOGLE_API_KEY is required when LLM_PROVIDER=gemini")
 if LLM_PROVIDER == "opencode" and not OPENCODE_API_KEY:
     raise ValueError("OPENCODE_API_KEY is required when LLM_PROVIDER=opencode")
+if LLM_PROVIDER in ("openai", "realtime") and not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY is required when LLM_PROVIDER=openai or realtime")
 
 # Murf TTS
 MURF_API_KEY: str = _require("MURF_API_KEY")
