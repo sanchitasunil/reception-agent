@@ -37,7 +37,7 @@ flowchart LR
     F -->|reply text| G["Murf Falcon TTS"]
     G -->|audio| D
 
-    F -.->|"upsert"| H[("Supabase\nslots · patients\nappointments\ncall_logs")]
+    F -.->|"upsert"| H[("Supabase\nslots · customers\nappointments\ncall_logs")]
     F -.->|"confirmation"| I["📱 WhatsApp"]
     F -.->|"mirror"| J["📅 Google Calendar"]
 
@@ -429,16 +429,16 @@ The script creates all four tables, adds indexes, and seeds 14 days of available
 
 | Table | What it stores |
 |---|---|
-| `patients` | Caller name, preferred doctor, visit history, call count |
+| `customers` | Caller name, preferred doctor, visit history, call count |
 | `slots` | Every 30-minute time slot - available or booked, with doctor, date, and time |
 | `appointments` | Booking audit log with confirmed / cancelled / rescheduled status |
 | `call_logs` | Full call transcript, intent label, and outcome label for every call |
 
 ### Caller memory
 
-On every inbound call the agent looks up the caller's phone number from the SIP metadata. If a match exists in `patients`, their name and last booking details are injected into the system prompt before the call starts. The agent greets them by name and skips asking for their number again.
+On every inbound call the agent looks up the caller's phone number from the SIP metadata. If a match exists in `customers`, their name and last booking details are injected into the system prompt before the call starts. The agent greets them by name and skips asking for their number again.
 
-After a successful booking, `patients` and `appointments` are upserted automatically.
+After a successful booking, `customers` and `appointments` are upserted automatically.
 
 **Test before making a call:**
 
@@ -451,7 +451,7 @@ python scripts/test_memory.py flow   --phone 9876543210   # run all of the above
 ```
 
 What to verify:
-- **First call:** `patients` and `appointments` rows appear in Supabase after a booking
+- **First call:** `customers` and `appointments` rows appear in Supabase after a booking
 - **Second call (same number):** agent greets by name, `call_count` increments
 - **Supabase down:** agent treats the caller as a first-timer and continues normally
 

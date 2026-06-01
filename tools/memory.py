@@ -41,7 +41,7 @@ def _get_patient_sync(phone: str) -> dict | None:
     client = get_client()
     normalized = _normalize_phone(phone)
     response = (
-        client.table("patients")
+        client.table("customers")
         .select("*")
         .eq("phone", normalized)
         .limit(1)
@@ -74,7 +74,7 @@ def _upsert_patient_sync(
     now = _now_iso()
 
     existing = (
-        client.table("patients")
+        client.table("customers")
         .select("call_count")
         .eq("phone", normalized)
         .limit(1)
@@ -96,7 +96,7 @@ def _upsert_patient_sync(
         "call_count": call_count,
         "last_seen": now,
     }
-    client.table("patients").upsert(row, on_conflict="phone").execute()
+    client.table("customers").upsert(row, on_conflict="phone").execute()
     return True
 
 
@@ -165,7 +165,7 @@ def _increment_call_count_sync(phone: str) -> None:
     client = get_client()
     normalized = _normalize_phone(phone)
     response = (
-        client.table("patients")
+        client.table("customers")
         .select("call_count")
         .eq("phone", normalized)
         .limit(1)
@@ -175,7 +175,7 @@ def _increment_call_count_sync(phone: str) -> None:
         return
 
     current = response.data[0].get("call_count") or 0
-    client.table("patients").update(
+    client.table("customers").update(
         {"call_count": current + 1, "last_seen": _now_iso()}
     ).eq("phone", normalized).execute()
 

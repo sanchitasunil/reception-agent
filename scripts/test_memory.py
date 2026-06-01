@@ -66,7 +66,7 @@ def _parse_args() -> argparse.Namespace:
     book.add_argument("--time", default="nine in the morning")
     book.add_argument(
         "--booking-id", 
-        default=f"ARG-TEST-{uuid.uuid4().hex[:6].upper()}"
+        default=f"TC-TEST-{uuid.uuid4().hex[:6].upper()}"
     )
     book.add_argument("--reason", default="follow-up on blood pressure")
 
@@ -87,7 +87,7 @@ def _parse_args() -> argparse.Namespace:
     flow.add_argument("--time", default="ten in the morning")
     flow.add_argument(
         "--booking-id",
-        default=f"ARG-TEST-{uuid.uuid4().hex[:6].upper()}"
+        default=f"TC-TEST-{uuid.uuid4().hex[:6].upper()}"
     )
     flow.add_argument("--reason", default="routine check-up")
 
@@ -192,7 +192,7 @@ async def _cmd_delete(phone: str) -> int:
     print(f"Normalized phone: {normalized}")
     client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
     client.table("appointments").delete().eq("phone", normalized).execute()
-    client.table("patients").delete().eq("phone", normalized).execute()
+    client.table("customers").delete().eq("phone", normalized).execute()
     row = await get_patient(phone)
     if row is None:
         print("Deleted. Patient no longer found.")

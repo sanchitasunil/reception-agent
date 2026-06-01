@@ -36,7 +36,7 @@ async def book_appointment(
     iso_date and iso_time: pass the values returned by check_availability
     (format: "2026-05-29" and "15:00"). If omitted, the next available slot is used.
     """
-    booking_id = f"ARG-{random.randint(1000, 9999)}"
+    booking_id = f"TC-{random.randint(1000, 9999)}"
 
     slot = await find_available_slot(doctor, iso_date, iso_time)
     if not slot.get("available") or not slot.get("slot_id"):

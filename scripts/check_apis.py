@@ -42,43 +42,26 @@ async def check_deepgram() -> bool:
 
 
 async def check_openai_stt() -> bool:
-    print("=== OpenAI STT (gpt-4o-transcribe) ===")
+    # gpt-realtime-whisper uses the Realtime WebSocket API, not the REST transcriptions endpoint.
+    # We validate the key by listing models instead — a 200 means auth is good.
+    print("=== OpenAI STT (gpt-realtime-whisper) ===")
     try:
-        import aiohttp, io
-        # Send a minimal silent WAV (44 bytes) — just enough to validate auth and model access
-        wav_header = bytes([
-            0x52,0x49,0x46,0x46,0x24,0x00,0x00,0x00,0x57,0x41,0x56,0x45,
-            0x66,0x6D,0x74,0x20,0x10,0x00,0x00,0x00,0x01,0x00,0x01,0x00,
-            0x22,0x56,0x00,0x00,0x44,0xAC,0x00,0x00,0x02,0x00,0x10,0x00,
-            0x64,0x61,0x74,0x61,0x00,0x00,0x00,0x00,
-        ])
-        form = aiohttp.FormData()
-        form.add_field("model", "gpt-4o-transcribe")
-        form.add_field("language", "en")
-        form.add_field("file", io.BytesIO(wav_header), filename="test.wav", content_type="audio/wav")
+        import aiohttp
         t0 = time.monotonic()
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.openai.com/v1/audio/transcriptions",
+            async with session.get(
+                "https://api.openai.com/v1/models",
                 headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}"},
-                data=form,
-                timeout=aiohttp.ClientTimeout(total=15),
+                timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
                 elapsed = time.monotonic() - t0
-                body = await resp.text()
                 if resp.status == 200:
-                    print(f"  OK  gpt-4o-transcribe reachable ({elapsed * 1000:.0f}ms)")
+                    print(f"  OK  OPENAI_API_KEY valid ({elapsed * 1000:.0f}ms) — gpt-realtime-whisper uses Realtime WebSocket")
                     return True
-                elif resp.status in (400, 422):
-                    # 400 from a silent/empty file is expected — means auth + model are fine
-                    print(f"  OK  authenticated, model accessible ({elapsed * 1000:.0f}ms)")
-                    return True
-                elif resp.status in (401, 403):
+                else:
+                    body = await resp.text()
                     print(f"  FAIL  HTTP {resp.status}: {body[:200]}")
                     print("  Fix: check OPENAI_API_KEY in .env")
-                    return False
-                else:
-                    print(f"  FAIL  HTTP {resp.status}: {body[:200]}")
                     return False
     except Exception as exc:
         print(f"  FAIL  {exc}")
@@ -95,7 +78,7 @@ async def check_murf() -> bool:
     print("=== Murf TTS ===")
     try:
         from livekit.plugins import murf
-        tts = murf.TTS(voice="en-IN-anisha", locale="en-IN")
+        tts = murf.TTS(voice="en-US-matthew", locale="en-US")
         frames: list = []
         t0 = time.monotonic()
         async with _http_ctx.open():

@@ -45,7 +45,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--doctor", default="Dr. Sarah Lin", help="Doctor name")
     parser.add_argument("--date", default="Thursday 29 May", help="Appointment date")
     parser.add_argument("--time", default="nine in the morning", help="Appointment time")
-    parser.add_argument("--booking-id", default="ARG-4242", help="Booking reference")
+    parser.add_argument("--booking-id", default="TC-4242", help="Booking reference")
     parser.add_argument(
         "--reason",
         default="follow-up on blood pressure",

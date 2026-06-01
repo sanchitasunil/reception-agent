@@ -232,7 +232,7 @@ def _booking_db() -> FakeDB:
                     "cancelled_at": None,
                 }
             ],
-            "patients": [],
+            "customers": [],
             "appointments": [],
             "call_logs": [],
         }
@@ -250,19 +250,19 @@ def _returning_patient_db() -> FakeDB:
                     "iso_date": "2026-06-10",
                     "iso_time": "10:00",
                     "status": "booked",
-                    "booking_id": "ARG-1111",
+                    "booking_id": "TC-1111",
                     "patient_name": "Rahul Sharma",
                     "phone": "+919876543210",
                     "reason": "blood pressure follow-up",
                     "cancelled_at": None,
                 }
             ],
-            "patients": [
+            "customers": [
                 {
                     "phone": "+919876543210",
                     "name": "Rahul Sharma",
                     "preferred_doctor": "Dr. James Cole",
-                    "last_booking_id": "ARG-1111",
+                    "last_booking_id": "TC-1111",
                     "last_appointment_date": "2026-06-10",
                     "last_appointment_time": "10:00",
                     "call_count": 3,
@@ -272,8 +272,8 @@ def _returning_patient_db() -> FakeDB:
             ],
             "appointments": [
                 {
-                    "id": "ARG-1111",
-                    "booking_id": "ARG-1111",
+                    "id": "TC-1111",
+                    "booking_id": "TC-1111",
                     "phone": "+919876543210",
                     "doctor": "Dr. James Cole",
                     "date": "Wednesday the 10th of June",
@@ -401,7 +401,7 @@ def test_system_prompt() -> None:
     patient = {
         "name": "Rahul Sharma",
         "preferred_doctor": "Dr. James Cole",
-        "last_booking_id": "ARG-1111",
+        "last_booking_id": "TC-1111",
         "last_appointment_date": "2026-06-10",
         "last_appointment_time": "10:00",
         "call_count": 3,
@@ -410,7 +410,7 @@ def test_system_prompt() -> None:
     _check("returning caller has memory block", "Caller memory" in prompt_known)
     _check("memory block contains name", "Rahul Sharma" in prompt_known)
     _check("memory block contains doctor", "Dr. James Cole" in prompt_known)
-    _check("memory block contains booking ref", "ARG-1111" in prompt_known)
+    _check("memory block contains booking ref", "TC-1111" in prompt_known)
     _check(
         "memory block suppresses name prompt",
         'Do not say "May I know your name"' in prompt_known,
@@ -449,7 +449,7 @@ async def test_availability_and_booking() -> None:
         )
         _check("booking confirmed", result.get("status") == "confirmed")
         bid = result.get("booking_id", "")
-        _check("booking_id has ARG prefix", bid.startswith("ARG-"))
+        _check("booking_id has ARG prefix", bid.startswith("TC-"))
 
         # Allow background tasks (WhatsApp, patient upsert, appointment log) to run
         await _drain()
@@ -458,7 +458,7 @@ async def test_availability_and_booking() -> None:
         _check("slot marked as booked", slot and slot.get("status") == "booked")
         _check("slot patient_name stored", slot and slot.get("patient_name") == "Ananya Iyer")
 
-        patient = _first(db, "patients", phone="+919123456789")
+        patient = _first(db, "customers", phone="+919123456789")
         _check("patient upserted", patient is not None)
         _check("patient name stored", patient and patient.get("name") == "Ananya Iyer")
         _check(
@@ -509,7 +509,7 @@ async def test_cancellation() -> None:
         )
         _check(
             "step 1 reads back appointment",
-            "Rahul Sharma" in resp1 and "ARG-1111" in resp1,
+            "Rahul Sharma" in resp1 and "TC-1111" in resp1,
             resp1[:80],
         )
         _check("step 1 does NOT cancel yet", "cancelled" not in resp1.lower())
@@ -529,7 +529,7 @@ async def test_cancellation() -> None:
         _check("slot freed after confirm", slot_after["status"] == "available")
         _check("slot phone cleared", slot_after.get("phone") is None)
 
-        appt = _first(db, "appointments", id="ARG-1111")
+        appt = _first(db, "appointments", id="TC-1111")
         _check("appointment marked cancelled", appt and appt.get("status") == "cancelled")
 
         _check(
@@ -561,7 +561,7 @@ async def test_reschedule() -> None:
         )
         _check(
             "step 1 reads back current appointment",
-            "Dr. James Cole" in resp1 and "ARG-1111" in resp1,
+            "Dr. James Cole" in resp1 and "TC-1111" in resp1,
             resp1[:80],
         )
 
@@ -599,14 +599,14 @@ async def test_reschedule() -> None:
         _check("new slot booked", new_slot["status"] == "booked")
         _check("new slot patient set", new_slot.get("patient_name") == "Rahul Sharma")
 
-        old_appt = _first(db, "appointments", id="ARG-1111")
+        old_appt = _first(db, "appointments", id="TC-1111")
         _check(
             "old appointment rescheduled",
             old_appt and old_appt.get("status") == "rescheduled",
         )
 
         new_bid = new_slot.get("booking_id", "")
-        _check("new booking_id has ARG prefix", new_bid.startswith("ARG-"))
+        _check("new booking_id has ARG prefix", new_bid.startswith("TC-"))
 
         _check(
             "WhatsApp reschedule notice sent",
@@ -636,9 +636,9 @@ def test_call_session() -> None:
     _check("booking intent inferred from 'book'", cs.intent == "booking")
 
     # Explicit outcome set
-    cs.set_outcome(intent="booking", outcome="booked", booking_id="ARG-9999")
+    cs.set_outcome(intent="booking", outcome="booked", booking_id="TC-9999")
     _check("outcome set", cs.call_outcome == "booked")
-    _check("booking_id stored", cs.booking_id == "ARG-9999")
+    _check("booking_id stored", cs.booking_id == "TC-9999")
 
     # Serialization
     tj = cs.to_transcript_json()
@@ -668,7 +668,7 @@ async def test_save_transcript() -> None:
     cs = CallSession(phone="+919876543210")
     cs.add_turn("agent", "Hello, this is Aria.")
     cs.add_turn("user", "Book me an appointment.")
-    cs.set_outcome(intent="booking", outcome="booked", booking_id="ARG-8888")
+    cs.set_outcome(intent="booking", outcome="booked", booking_id="TC-8888")
 
     with patch("tools.transcript.create_client", mock_create_client):
         ok = await save_transcript(cs)
@@ -680,7 +680,7 @@ async def test_save_transcript() -> None:
     _check("log phone matches", row.get("phone") == "+919876543210")
     _check("log intent matches", row.get("intent") == "booking")
     _check("log outcome matches", row.get("call_outcome") == "booked")
-    _check("log booking_id matches", row.get("booking_id") == "ARG-8888")
+    _check("log booking_id matches", row.get("booking_id") == "TC-8888")
     _check("transcript JSON stored", isinstance(row.get("transcript"), list))
     _check("duration_seconds present", isinstance(row.get("duration_seconds"), int))
 
@@ -692,14 +692,14 @@ def test_whatsapp_body() -> None:
         doctor="Dr. Sarah Lin",
         date="Friday 5 June",
         time="nine in the morning",
-        booking_id="ARG-5555",
+        booking_id="TC-5555",
         reason="routine check-up",
     )
     _check("body contains patient name", "Ananya Iyer" in body)
     _check("body contains doctor", "Dr. Sarah Lin" in body)
     _check("body contains date", "Friday 5 June" in body)
-    _check("body contains booking ref", "ARG-5555" in body)
-    _check("body contains clinic address", "Koramangala" in body)
+    _check("body contains booking ref", "TC-5555" in body)
+    _check("body contains clinic address", "Maplewood" in body)
     _check("body contains cancellation policy", "cancel" in body.lower())
 
 

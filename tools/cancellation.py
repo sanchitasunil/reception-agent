@@ -455,7 +455,7 @@ async def reschedule_appointment(
             f"Shall I go ahead with that?"
         )
 
-    new_booking_id = f"ARG-{uuid.uuid4().hex[:6].upper()}"
+    new_booking_id = f"TC-{uuid.uuid4().hex[:6].upper()}"
 
     cancelled = await free_slot(appt["slot_id"], appt["booking_id"])
     if not cancelled:

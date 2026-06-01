@@ -11,9 +11,9 @@
 create extension if not exists "pgcrypto";
 
 -- -----------------------------------------------------------------------------
--- 1. patients — caller memory
+-- 1. customers — caller memory
 -- -----------------------------------------------------------------------------
-create table if not exists patients (
+create table if not exists customers (
     phone                   text primary key,
     name                    text,
     preferred_doctor        text,
@@ -131,9 +131,9 @@ begin
 
     if exists (
         select 1 from information_schema.tables
-        where table_schema = 'public' and table_name = 'patients'
+        where table_schema = 'public' and table_name = 'customers'
     ) then
-        alter table patients add column if not exists first_seen timestamptz default now();
+        alter table customers add column if not exists first_seen timestamptz default now();
     end if;
 end $$;
 

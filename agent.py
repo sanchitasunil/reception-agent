@@ -193,11 +193,11 @@ def prewarm(proc: JobProcess) -> None:
     proc.userdata["vad"] = silero.VAD.load()
 
     # tts_for_calls is kept clean (no asyncio.run() event-loop state).
-    tts_for_calls = murf.TTS(voice="en-US-maverick", locale="en-US")
+    tts_for_calls = murf.TTS(voice="en-US-matthew", locale="en-US")
 
     async def _synthesise_greeting() -> list[rtc.AudioFrame]:
         # Throwaway instance: used only here so tts_for_calls stays uncontaminated.
-        tts_tmp = murf.TTS(voice="en-US-maverick", locale="en-US")
+        tts_tmp = murf.TTS(voice="en-US-matthew", locale="en-US")
         frames: list[rtc.AudioFrame] = []
         async with _http_ctx.open():
             async for audio in tts_tmp.synthesize(OPENING_LINE):
@@ -279,7 +279,7 @@ async def entrypoint(ctx: JobContext) -> None:
     )
     logger.info("Connected to %s (%.1fs)", ctx.room.name, time.monotonic() - t0)
 
-    tts_instance = ctx.proc.userdata.get("tts") or murf.TTS(voice="en-US-maverick", locale="en-US")
+    tts_instance = ctx.proc.userdata.get("tts") or murf.TTS(voice="en-US-matthew", locale="en-US")
 
     session = AgentSession(
         stt=openai.STT(model="gpt-realtime-whisper", use_realtime=True, language="en", api_key=config.OPENAI_API_KEY) if config.STT_PROVIDER == "openai"
