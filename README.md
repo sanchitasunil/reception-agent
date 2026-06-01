@@ -740,7 +740,7 @@ For callback-only intake, replace `book_appointment` with a lighter tool that lo
 **Restaurant reservations**
 
 ```
-You are Anaya, reservations AI for The Spice Room. Collect: guest name, contact number,
+You are Anaya, an AI receptionist who takes reservations for The Spice Room. Collect: guest name, contact number,
 date, time, party size, and any dietary requirements.
 ```
 
