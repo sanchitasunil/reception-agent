@@ -4,7 +4,7 @@ A fully autonomous voice agent designed to handle inbound clinic calls, schedule
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![LiveKit](https://img.shields.io/badge/Transport-LiveKit%20Agents-002cf2)](https://docs.livekit.io/agents)
-![STT](https://img.shields.io/badge/STT-Deepgram%20%7C%20OpenAI%20Whisper-13EF93?logoColor=black)
+![STT](https://img.shields.io/badge/STT-%20OpenAI%20Whisper%20%7C%20Deepgram%20-13EF93?logoColor=black)
 [![Murf](https://img.shields.io/badge/TTS-Murf%20Falcon-6366F1)](https://murf.ai/api)
 [![Twilio](https://img.shields.io/badge/Phone-Twilio%20SIP-F22F46?logo=twilio&logoColor=white)](https://twilio.com)
 [![Supabase](https://img.shields.io/badge/Database-Supabase-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com)
