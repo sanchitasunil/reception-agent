@@ -688,49 +688,6 @@ A general consultation is 500 rupees. A follow-up within two weeks is 350 rupees
 
 More on the models: [all-MiniLM-L6-v2 on HuggingFace](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) — [LanceDB docs](https://docs.lancedb.com/)
 
----
-
-## 8. Project structure
-
-```
-reception-agent/
-├── agent.py                       # LiveKit entrypoint, call routing, session setup
-├── config.py                      # Env var loading and validation
-├── knowledge/
-│   └── clinic_faq.md              # FAQ knowledge base (one ## heading = one chunk)
-├── prompts/
-│   └── system_prompt.py           # Agent persona, booking rules, caller memory injection
-├── tools/
-│   ├── appointment.py             # book_appointment, check_availability, get_doctor_list
-│   ├── booking.py                 # Supabase slot find + reserve
-│   ├── calendar_mirror.py         # Google Calendar write-only mirror
-│   ├── cancellation.py            # cancel_appointment, reschedule_appointment
-│   ├── faq.py                     # LanceDB index + search_faq tool
-│   ├── handoff.py                 # SIP REFER transfer to real phone
-│   ├── memory.py                  # Patient lookup, upsert, call count
-│   ├── notifications.py           # WhatsApp confirmation after booking
-│   └── transcript.py              # Transcript collection and call_logs write
-├── sql/
-│   └── create_tables.sql          # Full Supabase schema — run this once to set up
-├── supabase/
-│   └── functions/
-│       └── seed-slots/
-│           └── index.ts           # Weekly slot-seeding Edge Function
-├── scripts/
-│   ├── check_apis.py              # Test all API keys before first run
-│   ├── setup_twilio_sip.py        # One-time Twilio + LiveKit SIP setup
-│   ├── sip_monitor.py             # Backup dispatcher for SIP rooms (auto-started by agent.py)
-│   ├── watch_calls.py             # Real-time call arrival monitor
-│   ├── diagnose_telephony.py      # Check SIP trunk and dispatch rule config
-│   ├── fix_sip_trunk.py           # Fix trunk phone number mismatch
-│   ├── test_memory.py             # Test caller memory without a call
-│   ├── test_whatsapp_confirmation.py
-│   ├── test_calendar.py
-│   └── test_handoff.py
-├── requirements.txt
-├── .env.example
-└── README.md
-```
 
 ---
 
