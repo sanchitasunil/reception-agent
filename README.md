@@ -64,10 +64,9 @@ flowchart LR
 5. [Google Calendar](#5-google-calendar)
 6. [Transcript logging](#6-transcript-logging)
 7. [Knowledge base](#7-knowledge-base)
-8. [Project structure](#8-project-structure)
-9. [Adapting for your use case](#9-adapting-for-your-use-case)
-10. [Common errors](#10-common-errors)
-11. [Resources](#11-resources)
+8. [Adapting for your use case](#9-adapting-for-your-use-case)
+9. [Common errors](#10-common-errors)
+10. [Resources](#11-resources)
 
 ---
 
