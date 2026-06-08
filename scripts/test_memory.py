@@ -1,13 +1,13 @@
+# scripts/test_memory.py
 """
-Exercise Supabase caller memory without a phone call.
+Exercise Supabase caller memory without making a phone call.
 
 Run from project root:
   python scripts/test_memory.py lookup --phone 9876543210
   python scripts/test_memory.py book --phone 9876543210
   python scripts/test_memory.py call --phone 9876543210
   python scripts/test_memory.py prompt --phone 9876543210
-
-Requires .env with SUPABASE_URL and SUPABASE_KEY. Tables must exist (see README).
+  python scripts/test_memory.py flow --phone 9876543210
 """
 
 from __future__ import annotations
@@ -16,15 +16,17 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import sys
 import uuid
 from pathlib import Path
+from dotenv import load_dotenv
 
+# Ensure we can import from the project root
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import config  # noqa: E402
-from prompts.system_prompt import SYSTEM_PROMPT, build_system_prompt  # noqa: E402
-from tools.memory import (  # noqa: E402
+from prompts.system_prompt_2 import SYSTEM_PROMPT, build_system_prompt
+from tools.memory import (
     _normalize_phone,
     get_patient,
     increment_call_count,
@@ -32,9 +34,13 @@ from tools.memory import (  # noqa: E402
     upsert_patient,
 )
 
+load_dotenv()
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("test_memory")
 
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 def _print_patient(row: dict | None, normalized: str) -> None:
     print(f"Normalized phone: {normalized}")
@@ -43,7 +49,6 @@ def _print_patient(row: dict | None, normalized: str) -> None:
         return
     print("Patient:")
     print(json.dumps(row, indent=2, default=str))
-
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Test Supabase caller memory.")
@@ -96,11 +101,10 @@ def _parse_args() -> argparse.Namespace:
 
     return parser.parse_args()
 
-
 async def _cmd_lookup(phone: str) -> int:
     normalized = _normalize_phone(phone)
     print("=== lookup (get_patient) ===")
-    print(f"SUPABASE_URL: {config.SUPABASE_URL}")
+    print(f"SUPABASE_URL: {SUPABASE_URL}")
     print()
     row = await get_patient(phone)
     _print_patient(row, normalized)
@@ -108,7 +112,6 @@ async def _cmd_lookup(phone: str) -> int:
         print()
         print("No row (new caller or Supabase error — check logs).")
     return 0
-
 
 async def _cmd_call(phone: str) -> int:
     normalized = _normalize_phone(phone)
@@ -123,7 +126,6 @@ async def _cmd_call(phone: str) -> int:
     if before is None and after is None:
         print("(no-op — patient must exist; run book first)")
     return 0
-
 
 async def _cmd_book(args: argparse.Namespace) -> int:
     normalized = _normalize_phone(args.phone)
@@ -158,7 +160,6 @@ async def _cmd_book(args: argparse.Namespace) -> int:
         sys.exit(1)
     return 0
 
-
 async def _cmd_prompt(phone: str) -> int:
     normalized = _normalize_phone(phone)
     print("=== prompt (build_system_prompt) ===")
@@ -184,13 +185,12 @@ async def _cmd_prompt(phone: str) -> int:
     )
     return 0
 
-
 async def _cmd_delete(phone: str) -> int:
     from supabase import create_client
     normalized = _normalize_phone(phone)
     print(f"=== delete ===")
     print(f"Normalized phone: {normalized}")
-    client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+    client = create_client(SUPABASE_URL, SUPABASE_KEY)
     client.table("appointments").delete().eq("phone", normalized).execute()
     client.table("customers").delete().eq("phone", normalized).execute()
     row = await get_patient(phone)
@@ -199,7 +199,6 @@ async def _cmd_delete(phone: str) -> int:
     else:
         print("WARNING: patient row still present after delete.")
     return 0
-
 
 async def _cmd_flow(args: argparse.Namespace) -> int:
     phone = args.phone
@@ -219,7 +218,6 @@ async def _cmd_flow(args: argparse.Namespace) -> int:
 
     return 0
 
-
 async def main() -> None:
     args = _parse_args()
 
@@ -235,7 +233,6 @@ async def main() -> None:
         await _cmd_flow(args)
     elif args.action == "delete":
         await _cmd_delete(args.phone)
-
 
 if __name__ == "__main__":
     asyncio.run(main())

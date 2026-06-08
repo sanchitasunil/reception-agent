@@ -5,7 +5,7 @@ import logging
 import random
 from typing import Any
 
-from livekit.agents import function_tool, get_job_context
+from livekit.agents import RunContext, function_tool, get_job_context
 
 from tools.booking import find_available_slot, reserve_slot
 from tools.transcript import get_call_session
@@ -17,6 +17,7 @@ logger = logging.getLogger("clinic-agent.tools")
 
 @function_tool
 async def book_appointment(
+    context: RunContext,
     patient_name: str,
     phone: str,
     date: str,
@@ -36,6 +37,8 @@ async def book_appointment(
     iso_date and iso_time: pass the values returned by check_availability
     (format: "2026-05-29" and "15:00"). If omitted, the next available slot is used.
     """
+    context.session.say("Perfect, let me confirm that booking for you now.")
+
     booking_id = f"TC-{random.randint(1000, 9999)}"
 
     slot = await find_available_slot(doctor, iso_date, iso_time)
@@ -108,9 +111,12 @@ async def book_appointment(
 
 @function_tool
 async def check_availability(
+    context: RunContext,
     date: str,
     time: str,
     doctor: str,
+    iso_date: str | None = None,
+    iso_time: str | None = None,
 ) -> dict[str, Any]:
     """
     Call this when the caller asks if a specific date, time, or doctor slot is
@@ -118,9 +124,15 @@ async def check_availability(
 
     Use after you know the preferred date, time, and doctor. If unavailable,
     offer the next_available slot from the tool result.
+
+    iso_date: the requested date in YYYY-MM-DD format (derive from today's date).
+    iso_time: the requested time in HH:MM 24-hour format (e.g. "14:00").
+    Pass both whenever possible so the check targets the caller's preferred slot.
     """
+    if not context.session.current_speech:
+        context.session.say("One moment while I check that for you.")
     logger.info("Checking availability: %s on %s at %s", doctor, date, time)
-    slot = await find_available_slot(doctor)
+    slot = await find_available_slot(doctor, iso_date, iso_time)
     if slot.get("available"):
         return {
             "available": True,

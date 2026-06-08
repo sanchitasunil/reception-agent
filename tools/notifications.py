@@ -11,9 +11,23 @@ import config
 logger = logging.getLogger("clinic-agent.tools.notifications")
 
 
+_DIGIT_WORDS = [
+    ("zero", "0"), ("one", "1"), ("two", "2"), ("three", "3"), ("four", "4"),
+    ("five", "5"), ("six", "6"), ("seven", "7"), ("eight", "8"), ("nine", "9"),
+]
+
+
+def _words_to_digits(s: str) -> str:
+    """Replace spoken digit words with numerals (handles spaced and concatenated forms)."""
+    result = s
+    for word, digit in sorted(_DIGIT_WORDS, key=lambda x: -len(x[0])):
+        result = re.sub(word, digit, result, flags=re.IGNORECASE)
+    return result
+
+
 def _normalize_whatsapp_phone(phone: str) -> str:
     """Return Twilio WhatsApp address: whatsapp:+91XXXXXXXXXX."""
-    cleaned = re.sub(r"[\s\-()]", "", phone.strip())
+    cleaned = re.sub(r"[\s\-()]", "", _words_to_digits(phone).strip())
 
     if cleaned.startswith("+91"):
         e164 = cleaned

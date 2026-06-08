@@ -12,13 +12,33 @@ import config
 logger = logging.getLogger(__name__)
 
 
+_client: Client | None = None
+
+
 def get_client() -> Client:
-    return create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+    global _client
+    if _client is None:
+        _client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+    return _client
+
+
+_DIGIT_WORDS = [
+    ("zero", "0"), ("one", "1"), ("two", "2"), ("three", "3"), ("four", "4"),
+    ("five", "5"), ("six", "6"), ("seven", "7"), ("eight", "8"), ("nine", "9"),
+]
+
+
+def _words_to_digits(s: str) -> str:
+    """Replace spoken digit words with numerals (handles spaced and concatenated forms)."""
+    result = s
+    for word, digit in sorted(_DIGIT_WORDS, key=lambda x: -len(x[0])):
+        result = re.sub(word, digit, result, flags=re.IGNORECASE)
+    return result
 
 
 def _normalize_phone(phone: str) -> str:
     """Return E.164 +91XXXXXXXXXX (same rules as notifications, without whatsapp: prefix)."""
-    cleaned = re.sub(r"[\s\-()]", "", phone.strip())
+    cleaned = re.sub(r"[\s\-()]", "", _words_to_digits(phone).strip())
 
     if cleaned.startswith("+91"):
         return cleaned

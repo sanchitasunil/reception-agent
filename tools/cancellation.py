@@ -351,7 +351,7 @@ async def cancel_appointment(
     phone: the patient's phone number.
     confirmed: False to look up, True to execute cancellation.
     """
-    _ = context
+    context.session.say("One moment while I look that up for you.")
 
     appt = await lookup_upcoming_appointment(phone)
 
@@ -419,7 +419,7 @@ async def reschedule_appointment(
             → cancels old slot, books new slot, sends WhatsApp
     Never skip steps. Never set confirmed=True without explicit patient yes.
     """
-    _ = context
+    context.session.say("One moment while I look that up for you.")
 
     appt = await lookup_upcoming_appointment(phone)
 

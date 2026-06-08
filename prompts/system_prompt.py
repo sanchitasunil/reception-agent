@@ -1,12 +1,12 @@
 SYSTEM_PROMPT = """
 IDENTITY
 
-You are Aria, the AI receptionist for The Clinic.
+You are Matthew, the AI receptionist for The Clinic.
 You must identify yourself as an AI in the opening line of every call.
 Use a warm, calm, professional tone.
 
 Your opening line is fixed. Say it exactly at the start of every call, word for word:
-Hello, thank you for calling The Clinic. I'm Aria, your AI receptionist. How may I help you today?
+Hello, thank you for calling The Clinic. I'm Matthew, your AI receptionist. How may I help you today?
 
 Never pretend to be human. If asked, confirm clearly that you are an AI assistant.
 
@@ -132,8 +132,13 @@ Keep responses brief. Do not repeat information the caller already gave. If unsu
 
 
 def build_system_prompt(patient: dict | None) -> str:
+    from datetime import date as _date
+    d = _date.today()
+    date_line = f"Today is {d.strftime('%A, %B')} {d.day}, {d.year}.\n\n"
+    base = date_line + SYSTEM_PROMPT
+
     if patient is None:
-        return SYSTEM_PROMPT
+        return base
 
     last_appt = patient.get('last_appointment_date', 'unknown')
     last_time = patient.get('last_appointment_time', 'unknown')
@@ -158,4 +163,4 @@ You already know this caller. Do not ask for their name or phone number again.
 Greet them warmly by name. If they mention "my appointment", "reschedule", "cancel", or anything about an existing booking, refer to the appointment above — do not ask them to repeat details you already have.
 Do not say "May I know your name" or "Can I have your booking reference" — you already know both.
 """
-    return SYSTEM_PROMPT + memory_block
+    return base + memory_block

@@ -39,10 +39,28 @@ _HEADING_BOOSTS: list[tuple[tuple[str, ...], str]] = [
 ]
 
 
+_model: SentenceTransformer | None = None
+_db: lancedb.DBConnection | None = None
+
+
+def _get_model() -> SentenceTransformer:
+    global _model
+    if _model is None:
+        _model = SentenceTransformer(MODEL_NAME)
+    return _model
+
+
+def _get_db() -> lancedb.DBConnection:
+    global _db
+    if _db is None:
+        _db = lancedb.connect(DB_PATH)
+    return _db
+
+
 def prefetch_embedding_model() -> None:
     """Pre-download embedding weights (used by agent.py download-files)."""
     try:
-        SentenceTransformer(MODEL_NAME)
+        _get_model()
         logger.info("Embedding model %s ready", MODEL_NAME)
     except Exception as exc:
         logger.error("Embedding model prefetch failed: %s", exc)
@@ -123,7 +141,7 @@ def build_index() -> None:
             logger.error("No FAQ chunks produced from %s", FAQ_PATH)
             return
 
-        model = SentenceTransformer(MODEL_NAME)
+        model = _get_model()
         vectors = model.encode([c["full"] for c in chunk_list])
 
         data = [
@@ -136,7 +154,7 @@ def build_index() -> None:
             for i, chunk in enumerate(chunk_list)
         ]
 
-        db = lancedb.connect(DB_PATH)
+        db = _get_db()
         if TABLE_NAME in db.table_names():
             db.drop_table(TABLE_NAME)
         db.create_table(TABLE_NAME, data)
@@ -159,10 +177,10 @@ async def search_faq(query: str) -> str:
 
     def _search(q: str) -> str:
         try:
-            model = SentenceTransformer(MODEL_NAME)
+            model = _get_model()
             vec = model.encode([q])[0].tolist()
 
-            db = lancedb.connect(DB_PATH)
+            db = _get_db()
             if TABLE_NAME not in db.table_names():
                 return ""
 

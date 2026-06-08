@@ -20,6 +20,7 @@ from livekit.agents import (
     WorkerOptions,
     cli,
 )
+from livekit.agents.llm import ChatContext
 from livekit.agents import tts as agents_tts
 from livekit.agents.tts import AudioEmitter
 from livekit.agents.types import APIConnectOptions
@@ -56,7 +57,7 @@ logging.getLogger("h2").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 OPENING_LINE = (
-    "Hello, thank you for calling The Clinic. I'm Aria, your AI receptionist. "
+    "Hello, thank you for calling The Clinic. I'm Matthew, your AI receptionist. "
     "How may I help you today?"
 )
 
@@ -65,7 +66,7 @@ def _opening_line_for_patient(patient_memory: dict | None) -> str:
     if patient_memory and patient_memory.get("name"):
         name = patient_memory["name"]
         return (
-            f"Hello {name}, welcome back to The Clinic. I'm Aria, your AI receptionist. "
+            f"Hello {name}, welcome back to The Clinic. I'm Matthew, your AI receptionist. "
             f"How can I help you today?"
         )
     return OPENING_LINE
@@ -173,9 +174,12 @@ class CachedGreetingTTS(agents_tts.TTS):
 # ── Agent ──────────────────────────────────────────────────────────────────────
 
 class ClinicAgent(Agent):
-    def __init__(self, instructions: str) -> None:
+    def __init__(self, instructions: str, opening_line: str) -> None:
+        chat_ctx = ChatContext()
+        chat_ctx.add_message(role="assistant", content=opening_line)
         super().__init__(
             instructions=instructions,
+            chat_ctx=chat_ctx,
             tools=[
                 book_appointment,
                 check_availability,
@@ -193,11 +197,11 @@ def prewarm(proc: JobProcess) -> None:
     proc.userdata["vad"] = silero.VAD.load()
 
     # tts_for_calls is kept clean (no asyncio.run() event-loop state).
-    tts_for_calls = murf.TTS(voice="en-US-matthew", locale="en-US")
+    tts_for_calls = murf.TTS(voice="en-US-matthew", locale="en-IN")
 
     async def _synthesise_greeting() -> list[rtc.AudioFrame]:
         # Throwaway instance: used only here so tts_for_calls stays uncontaminated.
-        tts_tmp = murf.TTS(voice="en-US-matthew", locale="en-US")
+        tts_tmp = murf.TTS(voice="en-US-matthew", locale="en-IN")
         frames: list[rtc.AudioFrame] = []
         async with _http_ctx.open():
             async for audio in tts_tmp.synthesize(OPENING_LINE):
@@ -214,6 +218,13 @@ def prewarm(proc: JobProcess) -> None:
     except Exception:
         logger.exception("Greeting pre-synthesis failed, will synthesize on first call")
         proc.userdata["tts"] = tts_for_calls
+
+    from tools.faq import _get_model as _faq_model
+    try:
+        _faq_model()
+        logger.info("FAQ embedding model warmed")
+    except Exception:
+        logger.exception("FAQ model warm-up failed at prewarm")
 
     from tools.booking import check_slot_coverage
 
@@ -279,11 +290,11 @@ async def entrypoint(ctx: JobContext) -> None:
     )
     logger.info("Connected to %s (%.1fs)", ctx.room.name, time.monotonic() - t0)
 
-    tts_instance = ctx.proc.userdata.get("tts") or murf.TTS(voice="en-US-matthew", locale="en-US")
+    tts_instance = ctx.proc.userdata.get("tts") or murf.TTS(voice="en-US-matthew", locale="en-IN")
 
     session = AgentSession(
         stt=openai.STT(model="gpt-realtime-whisper", use_realtime=True, language="en", api_key=config.OPENAI_API_KEY) if config.STT_PROVIDER == "openai"
-        else deepgram.STT(model="nova-3", language="en"),
+        else deepgram.STT(model="nova-3", language="en-IN"),
         llm=google.LLM(model="gemini-2.5-flash") if config.LLM_PROVIDER == "gemini"
         else openai.LLM(model="gpt-4o-mini", api_key=config.OPENAI_API_KEY) if config.LLM_PROVIDER == "openai"
         else openai.LLM(model="kimi-k2.5", base_url="https://opencode.ai/zen/go/v1", api_key=config.OPENCODE_API_KEY),
@@ -337,7 +348,7 @@ async def entrypoint(ctx: JobContext) -> None:
             if text:
                 call_session.add_turn("agent", text)
 
-    await session.start(ClinicAgent(prompt), room=ctx.room)
+    await session.start(ClinicAgent(prompt, opening_line), room=ctx.room)
     logger.info("Session started (%.1fs)", time.monotonic() - t0)
 
     if is_phone:
