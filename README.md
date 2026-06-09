@@ -26,32 +26,7 @@ A fully autonomous voice agent designed to handle inbound clinic calls, schedule
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    A["📞 Caller"] -->|dials| B["Twilio"]
-    B -->|TwiML → SIP| C["LiveKit SIP Trunk"]
-    C -->|dispatch rule| D["clinic-agent"]
-
-    D -->|audio| E["STT"]
-    E -->|transcript| F["LLM"]
-    F -->|reply text| G["Murf Falcon TTS"]
-    G -->|audio| D
-
-    F -.->|"upsert"| H[("Supabase\nslots · customers\nappointments\ncall_logs")]
-    F -.->|"confirmation"| I["📱 WhatsApp"]
-    F -.->|"mirror"| J["📅 Google Calendar"]
-
-    style A fill:#444,stroke:#888,color:#fff
-    style B fill:#F22F46,stroke:#f77,color:#fff
-    style C fill:#002cf2,stroke:#88aaff,color:#fff
-    style D fill:#1a1a2e,stroke:#6366F1,color:#fff
-    style E fill:#13EF93,stroke:#0a9,color:#000
-    style F fill:#4285F4,stroke:#89b4fa,color:#fff
-    style G fill:#6366F1,stroke:#a5b4fc,color:#fff
-    style H fill:#3ECF8E,stroke:#1a7a5a,color:#000
-    style I fill:#25D366,stroke:#128C7E,color:#fff
-    style J fill:#1a73e8,stroke:#669df6,color:#fff
-```
+![Architecture](images/architecture.png)
 
 ---
 
@@ -655,7 +630,9 @@ View a transcript: Supabase dashboard > `call_logs` > expand the `transcript` ce
 
 ---
 
-## 7. Knowledge base
+## 7. RAG
+
+![RAG](images/RAG.png)
 
 The agent answers factual questions by searching `knowledge/clinic_faq.md`. It does not guess. If the FAQ has no useful answer it says so and offers a callback.
 
