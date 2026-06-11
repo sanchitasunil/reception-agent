@@ -197,11 +197,11 @@ def prewarm(proc: JobProcess) -> None:
     proc.userdata["vad"] = silero.VAD.load()
 
     # tts_for_calls is kept clean (no asyncio.run() event-loop state).
-    tts_for_calls = murf.TTS(voice="en-US-matthew", locale="en-IN")
+    tts_for_calls = murf.TTS(voice="en-US-matthew", locale="en-US")
 
     async def _synthesise_greeting() -> list[rtc.AudioFrame]:
         # Throwaway instance: used only here so tts_for_calls stays uncontaminated.
-        tts_tmp = murf.TTS(voice="en-US-matthew", locale="en-IN")
+        tts_tmp = murf.TTS(voice="en-US-matthew", locale="en-US")
         frames: list[rtc.AudioFrame] = []
         async with _http_ctx.open():
             async for audio in tts_tmp.synthesize(OPENING_LINE):
@@ -290,7 +290,7 @@ async def entrypoint(ctx: JobContext) -> None:
     )
     logger.info("Connected to %s (%.1fs)", ctx.room.name, time.monotonic() - t0)
 
-    tts_instance = ctx.proc.userdata.get("tts") or murf.TTS(voice="en-US-matthew", locale="en-IN")
+    tts_instance = ctx.proc.userdata.get("tts") or murf.TTS(voice="en-US-matthew", locale="en-US")
 
     session = AgentSession(
         stt=openai.STT(model="gpt-realtime-whisper", use_realtime=True, language="en", api_key=config.OPENAI_API_KEY) if config.STT_PROVIDER == "openai"
@@ -365,26 +365,6 @@ async def entrypoint(ctx: JobContext) -> None:
     logger.info("Room %s disconnected", ctx.room.name)
 
 
-def _start_sip_monitor() -> None:
-    """
-    Spawn sip_monitor.py as a companion subprocess.
-
-    LiveKit's room_config.agents auto-dispatch does not fire reliably for
-    SIP-created rooms. The monitor polls every second and manually dispatches
-    clinic-agent to any new clinic- room that has a SIP participant but no agent.
-    It is terminated automatically when this process exits.
-    """
-    import atexit
-    import subprocess
-    import sys
-    from pathlib import Path
-
-    script = Path(__file__).parent / "scripts" / "sip_monitor.py"
-    proc = subprocess.Popen([sys.executable, str(script)])
-    atexit.register(proc.terminate)
-    logger.info("SIP monitor started (pid=%d)", proc.pid)
-
-
 if __name__ == "__main__":
     import sys
 
@@ -393,8 +373,6 @@ if __name__ == "__main__":
 
         prefetch_embedding_model()
         build_index()
-    else:
-        _start_sip_monitor()
 
     cli.run_app(
         WorkerOptions(

@@ -46,4 +46,4 @@ The Clinic is not an emergency facility. For any medical emergency, call your lo
 
 ## Contact
 
-Our phone number is 555-0142, answered by Aria our AI receptionist during clinic hours. WhatsApp is available on the same number for confirmations and non-urgent messages. Email us at hello@theclinic.example for non-urgent queries — we respond within twenty-four hours on working days.
+Our phone number is 555-0142, answered by Matthew our AI receptionist during clinic hours. WhatsApp is available on the same number for confirmations and non-urgent messages. Email us at hello@theclinic.example for non-urgent queries — we respond within twenty-four hours on working days.
