@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 # Ensure we can import from the project root
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from prompts.system_prompt_2 import SYSTEM_PROMPT, build_system_prompt
+from prompts.system_prompt import SYSTEM_PROMPT, build_system_prompt
 from tools.memory import (
     _normalize_phone,
     get_patient,
